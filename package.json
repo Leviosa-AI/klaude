@@ -1,0 +1,44 @@
+{
+  "name": "klaude",
+  "version": "0.0.1",
+  "description": "Korean-native wrapper for Claude Code. Type Korean, Claude reads English, replies Korean.",
+  "type": "module",
+  "bin": {
+    "klaude": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.ko.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "korean",
+    "translation",
+    "cli",
+    "wrapper"
+  ],
+  "author": "Max Kim (Dindb-dong)",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0",
+    "@xterm/headless": "^5.5.0",
+    "node-pty": "^1.2.0-beta.13"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
