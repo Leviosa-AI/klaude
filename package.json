@@ -10,13 +10,22 @@
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
-    "prepublishOnly": "npm run build"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "check": "biome check src",
+    "format": "biome format --write src",
+    "lint": "biome lint src",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run check && npm run typecheck && npm test && npm run build"
   },
   "files": [
     "dist",
+    "docs",
     "README.md",
     "README.ko.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=20"
@@ -29,16 +38,33 @@
     "cli",
     "wrapper"
   ],
-  "author": "Max Kim (Dindb-dong)",
+  "author": {
+    "name": "Leviosa AI",
+    "url": "https://github.com/Leviosa-AI"
+  },
+  "contributors": [
+    "Max Kim <dongwook443@yonsei.ac.kr> (https://github.com/Dindb-dong)"
+  ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Leviosa-AI/klaude.git"
+  },
+  "homepage": "https://github.com/Leviosa-AI/klaude#readme",
+  "bugs": {
+    "url": "https://github.com/Leviosa-AI/klaude/issues"
+  },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.32.0",
+    "@anthropic-ai/sdk": "^0.100.1",
     "@xterm/headless": "^5.5.0",
     "node-pty": "^1.2.0-beta.13"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
     "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^4.1.7",
     "tsx": "^4.19.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.7"
   }
 }
