@@ -1,0 +1,61 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0] - 2026-05-30
+
+First public release on npm.
+
+### Added
+
+- Korean → English Enter-time intercept for Claude Code via `node-pty`
+  PTY spawn and `@xterm/headless` screen mirror.
+- Two translation backends:
+  - **Haiku** (default, requires `ANTHROPIC_API_KEY`)
+  - **Ollama** (local, configurable host and model)
+- Placeholder protection for `@mentions`, `/slash-commands`, inline /
+  fenced code, and URLs; round-trip mask + restore around translation.
+- Line-level masking for large pasted logs / code dumps (activates above
+  400 chars with ≥ 3 non-Korean lines).
+- Translation failure detection with one retry: CJK echo, few-shot example
+  echo, length disproportion, and missing input content. On total failure,
+  klaude falls back to submitting the original Korean (Claude is
+  multilingual) rather than fabricated English.
+- User glossary: `klaude glossary add/remove/list` for Korean → English
+  proper-noun mappings that take priority over the built-in jargon list.
+- Smart pass-through: autocomplete popups, `1. Yes`-anchored confirmation
+  menus, `✓ Submit` form widgets, boxed modal dialogs, and editor
+  attachment markers (`[Image #N]` / `[Pasted text #N]`) all bypass
+  translation so the underlying Claude Code TUI behaves natively.
+- Token-discipline rules install/uninstall (`klaude install-rules` /
+  `klaude uninstall-rules`) — four rules added to `~/.claude/CLAUDE.md`
+  to reduce token usage globally.
+- Debug log at `~/.klaude/debug.log` with 10 MB rotation
+  (override via `KLAUDE_LOG_MAX_BYTES`). Disabled by default.
+- Subcommands: `config get/set`, `glossary list/add/remove`,
+  `install-rules`, `uninstall-rules`, `--version`, `--help`. All other
+  flags pass through to `claude` unchanged (`--resume`, `--continue`,
+  `--model`, etc.).
+- Privacy section in README documenting backend transmission behavior
+  and the on-disk debug log.
+- Platform support table: macOS validated, Linux/Windows experimental.
+- Build-tools prerequisite notes for `node-pty` native module compilation.
+
+### Infrastructure
+
+- vitest test suite: 76 tests across `tokenize`, `mirror`, `translate`,
+  `intercept`, `log`.
+- Biome lint + format configuration; `npm run check / format / lint`.
+- GitHub Actions CI on macOS-latest with Node 20 and 22 matrix:
+  Biome check → tsc typecheck → vitest → tsc build → install/uninstall
+  smoke test.
+- Community files: `CONTRIBUTING.md`, `SECURITY.md`, bug-report and
+  feature-request issue templates, and a PR template.
+
+[Unreleased]: https://github.com/Leviosa-AI/klaude/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Leviosa-AI/klaude/releases/tag/v0.1.0
