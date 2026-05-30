@@ -76,7 +76,11 @@ export function protect(input: string): ProtectResult {
   return { masked, tokens };
 }
 
-function applyPattern(text: string, { regex, hasLeadAnchor }: Pattern, tokens: string[]): string {
+function applyPattern(
+  text: string,
+  { regex, hasLeadAnchor }: Pattern,
+  tokens: string[],
+): string {
   return text.replace(regex, (...args) => {
     const match = args[0] as string;
     const lead = hasLeadAnchor ? ((args[1] as string) ?? "") : "";

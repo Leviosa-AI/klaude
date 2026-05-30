@@ -1,4 +1,5 @@
 import pkg from "@xterm/headless";
+
 const { Terminal } = pkg;
 type TerminalInstance = InstanceType<typeof Terminal>;
 
@@ -271,7 +272,7 @@ function isDividerLine(row: string): boolean {
  * rows before declaring the popup open.
  */
 const POPUP_ITEM_PATTERN =
-  /^[▌▶›❯>]\s|^\/[\w:\-]+(?:\s|$)|^[\w][\w.\-]*\.[a-zA-Z]{1,6}(?:\s|$)|\/[\w.\-]+\.[a-zA-Z]{1,6}(?:\s|$)/;
+  /^[▌▶›❯>]\s|^\/[\w:-]+(?:\s|$)|^[\w][\w.-]*\.[a-zA-Z]{1,6}(?:\s|$)|\/[\w.-]+\.[a-zA-Z]{1,6}(?:\s|$)/;
 
 /**
  * Claude Code renders a status bar / hint line below the input

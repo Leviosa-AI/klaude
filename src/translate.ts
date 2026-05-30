@@ -7,11 +7,7 @@ export interface Glossary {
   entries: Array<[string, string]>;
 }
 
-const SYSTEM_PROMPT = (
-  sourceLang: string,
-  targetLang: string,
-  glossary: Glossary,
-) =>
+const SYSTEM_PROMPT = (sourceLang: string, targetLang: string, glossary: Glossary) =>
   `You are a translation engine for a software developer. Translate the user's message from ${sourceLang} to ${targetLang}.
 
 CRITICAL RULES (must be followed):
@@ -107,7 +103,7 @@ class HaikuTranslator implements Translator {
       messages: [{ role: "user", content: text }],
     });
     const block = res.content.find((b) => b.type === "text");
-    if (!block || block.type !== "text") {
+    if (block?.type !== "text") {
       throw new Error("no text block in response");
     }
     return block.text.trim();
@@ -304,8 +300,7 @@ function repairMissingPlaceholders(
 ): string {
   // Normalize common LLM-mangled placeholder variants back to {K\d+}.
   //   { K0 }, {k0}, ｛K0｝, [K0], ﹛K0﹜  →  {K0}
-  let normalized = translated
-    .replace(/[｛{﹛\[]\s*[Kk]\s*(\d+)\s*[｝}﹜\]]/g, "{K$1}");
+  const normalized = translated.replace(/[｛{﹛[]\s*[Kk]\s*(\d+)\s*[｝}﹜\]]/g, "{K$1}");
 
   const present = new Set(
     Array.from(normalized.matchAll(/{K(\d+)}/g)).map((m) => Number(m[1])),

@@ -111,8 +111,6 @@ export async function maybePromptForRulesInstall(): Promise<void> {
       process.stdout.write(`Rules already present in ${CLAUDE_MD_PATH}\n\n`);
     }
   } else {
-    process.stdout.write(
-      `Skipped. Run \`klaude install-rules\` later to add them.\n\n`,
-    );
+    process.stdout.write(`Skipped. Run \`klaude install-rules\` later to add them.\n\n`);
   }
 }

@@ -3,11 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig, resolveBackendFromEnv, saveConfig } from "./config.js";
-import {
-  installRules,
-  maybePromptForRulesInstall,
-  uninstallRules,
-} from "./firstRun.js";
+import { installRules, maybePromptForRulesInstall, uninstallRules } from "./firstRun.js";
 import { Interceptor } from "./intercept.js";
 import { makeLogger } from "./log.js";
 import { ScreenMirror } from "./mirror.js";
