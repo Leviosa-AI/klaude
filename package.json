@@ -1,5 +1,5 @@
 {
-  "name": "klaude",
+  "name": "@leviosa-ai/klaude",
   "version": "0.1.0",
   "description": "Korean-native wrapper for Claude Code. Type Korean, Claude reads English, replies Korean.",
   "type": "module",
@@ -21,7 +21,7 @@
   },
   "files": [
     "dist",
-    "docs",
+    "docs/WINDOWS.md",
     "README.md",
     "README.ko.md",
     "LICENSE",
@@ -53,6 +53,9 @@
   "homepage": "https://github.com/Leviosa-AI/klaude#readme",
   "bugs": {
     "url": "https://github.com/Leviosa-AI/klaude/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",

@@ -105,10 +105,11 @@ Linux/Windows 사용자는 `KLAUDE_DUMP_POPUP=1`로 화면 덤프를 떠서 이�
 ## Install
 
 ```bash
-npm install -g klaude
+npm install -g @leviosa-ai/klaude
 ```
 
-설치 후 `claude` 대신 `klaude`로 실행:
+npm 패키지는 Leviosa AI org 스코프로 게시되지만, 설치되는 실행 파일은
+그대로 `klaude` 다. `claude` 대신 `klaude`로 실행:
 
 ```bash
 klaude                  # Claude Code 그대로 실행, 인터셉트 활성

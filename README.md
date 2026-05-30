@@ -110,10 +110,12 @@ issues with screen dumps from `KLAUDE_DUMP_POPUP=1`.
 ## Install
 
 ```bash
-npm install -g klaude
+npm install -g @leviosa-ai/klaude
 ```
 
-Then run `klaude` wherever you would normally run `claude`:
+The published package is scoped under the Leviosa AI org, but the binary
+it installs is still called `klaude`. Run it wherever you would normally
+run `claude`:
 
 ```bash
 klaude                  # Launches Claude Code with the intercept layer
