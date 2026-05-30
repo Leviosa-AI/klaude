@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Only macOS is in the matrix — Linux/Windows are not yet verified end-to-end
+# against Claude Code's TUI. Once we validate those platforms (PTY behavior,
+# node-pty prebuilt binaries, Claude Code resolution paths), add them here.
+jobs:
+  test:
+    name: test (macos-${{ matrix.os-version }}, node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os-version: [latest]
+        node: [20, 22]
+    runs-on: macos-${{ matrix.os-version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint + format check (Biome)
+        run: npm run check
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Unit tests (vitest)
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Smoke-test rules install/uninstall
+        run: |
+          TMPHOME=$(mktemp -d)
+          HOME="$TMPHOME" node dist/index.js install-rules
+          grep -q "klaude:token-rules:start" "$TMPHOME/.claude/CLAUDE.md"
+          HOME="$TMPHOME" node dist/index.js uninstall-rules
+          ! grep -q "klaude:token-rules:start" "$TMPHOME/.claude/CLAUDE.md" || (echo "uninstall failed" && exit 1)
+          rm -rf "$TMPHOME"
