@@ -1,0 +1,107 @@
+name: Bug report
+description: Report a problem with klaude
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report.
+
+        Before submitting:
+        - Search [existing issues](https://github.com/Leviosa-AI/klaude/issues?q=is%3Aissue) to avoid duplicates.
+        - Redact any prompt text or log lines that contain secrets / PII / proprietary code.
+
+  - type: input
+    id: klaude-version
+    attributes:
+      label: klaude version
+      description: Output of `klaude --version`
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS (tested platform)
+        - Linux (experimental)
+        - Windows (experimental)
+        - WSL
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+      placeholder: "macOS 15.2 / Ubuntu 24.04 / Windows 11"
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      description: Output of `node --version`
+      placeholder: "v22.10.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Translation backend
+      options:
+        - Haiku (Anthropic)
+        - Ollama (local)
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal reproduction. Include the Korean input that triggered the issue (redact secrets).
+      placeholder: |
+        1. Run `klaude` in a fresh shell
+        2. Type "한국어 입력 예시"
+        3. Press Enter
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead, including any error messages.
+    validations:
+      required: true
+
+  - type: textarea
+    id: debug-log
+    attributes:
+      label: Relevant debug log excerpt
+      description: |
+        If `debug: true`, paste the last ~50 lines of `~/.klaude/debug.log` covering the failure.
+        **Redact any prompt text that contains secrets before sharing.**
+      render: text
+
+  - type: textarea
+    id: screen-dump
+    attributes:
+      label: Screen dump (for TUI / popup detection bugs)
+      description: |
+        Reproduce with `KLAUDE_DUMP_POPUP=1 klaude` and paste the dump.
+        Helpful when an autocomplete popup, picker, or modal is misclassified.
+      render: text
