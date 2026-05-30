@@ -89,6 +89,19 @@ Claude Code에 흘려보내고, Claude는 영어로 추론하다가 한국어로
 └──────────────────────────────────────────────┘
 ```
 
+## 지원 플랫폼
+
+| 플랫폼 | 상태 |
+|--------|------|
+| **macOS** | ✅ 검증됨, 주 개발 환경 |
+| Linux | ⚠️ 실험적 — 종단 검증 미완료 |
+| Windows | ⚠️ 실험적 — 설치 경로는 문서화됐지만 TUI 상호작용 미검증 |
+
+klaude는 `node-pty`와 `@xterm/headless` 위에 동작한다. 두 라이브러리는 원리상
+3개 플랫폼 모두 지원하지만, 화면 미러 휴리스틱(autocomplete popup 감지, 모달
+prompt 감지, divider 파싱)은 macOS 환경의 Claude Code TUI 기준으로만 검증됐다.
+Linux/Windows 사용자는 `KLAUDE_DUMP_POPUP=1`로 화면 덤프를 떠서 이슈 등록 환영.
+
 ## Install
 
 ```bash
@@ -104,6 +117,21 @@ klaude --help
 
 > **First run:** 처음 실행하면 토큰 절약 규칙 4개를 글로벌 `~/.claude/CLAUDE.md`에
 > 추가할지 묻는다. 기본값은 No, 거부해도 klaude는 정상 동작한다. ([자세히](#token-discipline-rules))
+
+### 빌드 도구 사전 요구사항
+
+klaude는 **네이티브 모듈**인 `node-pty`에 의존한다. 일반 플랫폼용 prebuilt
+바이너리를 제공하지만, `npm install` 중 `node-gyp`가 실행되며 소스 빌드로
+넘어가는 경우 다음 빌드 도구를 먼저 설치해야 한다:
+
+| 플랫폼 | 명령 |
+|--------|------|
+| macOS | `xcode-select --install` |
+| Debian / Ubuntu | `sudo apt-get install -y python3 make g++` |
+| Fedora / RHEL | `sudo dnf install -y python3 make gcc-c++` |
+| Windows | [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) + Python 3 설치 |
+
+`@xterm/headless`는 순수 JavaScript라 빌드 도구가 필요 없다.
 
 ## How it works
 
@@ -168,6 +196,23 @@ confirmation/permission 메뉴를 커버한다 — 옵션 1 의 8 가지 변형
 모두 literal `Yes` 로 시작. Picker 다이얼로그 (ModelPicker / ThemePicker / settings)
 는 `borderStyle: "single"` 을 써서 boxed-prompt 분기에서 catch. Claude Code TUI
 는 영어 전용이라 이 앵커들은 안정적.
+
+## Privacy
+
+**klaude는 Enter를 누를 때마다 입력 프롬프트를 번역 백엔드로 전송한다.**
+
+- **Haiku 백엔드** (기본): Anthropic API로 TLS 전송. Anthropic의 데이터 처리
+  정책이 적용된다.
+- **Ollama 백엔드**: 로컬 Ollama 호스트 (기본 `localhost:11434`)로 전송.
+  기기 외부로 나가지 않는다.
+
+klaude는 그 외 어떤 것도 전송하지 않는다 — 파일 내용, 환경 변수(`Haiku` 인증용
+`ANTHROPIC_API_KEY` 제외), 입력박스 바깥의 텍스트 모두 해당 없음. 디스크에
+남는 유일한 산출물은 옵션 디버그 로그 `~/.klaude/debug.log` 뿐 (`debug: true`
+일 때만 생성, 회전 없음 — `klaude config set debug false` 로 비활성).
+
+Enter를 누르기 전에 시크릿/PII/기밀 코드가 프롬프트에 들어있지 않은지 확인할 것.
+전송 후에는 klaude가 되돌릴 수 없다. 완전 로컬 운용을 원하면 Ollama 백엔드 사용.
 
 ## Backends
 

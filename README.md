@@ -93,6 +93,20 @@ if you'd written perfect English yourself.
 └──────────────────────────────────────────────────┘
 ```
 
+## Platform support
+
+| Platform | Status |
+|----------|--------|
+| **macOS** | ✅ Tested, primary development target |
+| Linux | ⚠️ Experimental — not yet verified end-to-end |
+| Windows | ⚠️ Experimental — install path documented but TUI interaction untested |
+
+klaude is built on `node-pty` and `@xterm/headless`. Both support all three
+platforms in principle, but the screen-mirror heuristics (autocomplete popup
+detection, prompt box detection, divider parsing) have only been validated
+against Claude Code's macOS TUI. Linux/Windows users are welcome to file
+issues with screen dumps from `KLAUDE_DUMP_POPUP=1`.
+
 ## Install
 
 ```bash
@@ -109,6 +123,21 @@ klaude --help
 > **First run:** klaude will offer to add four token-discipline rules to your
 > global `~/.claude/CLAUDE.md`. The prompt defaults to **No** and klaude works
 > fine if you decline. ([details](#token-discipline-rules))
+
+### Build-tools prerequisites
+
+klaude depends on `node-pty`, a **native module** that ships prebuilt binaries
+for common platforms. If `npm install` falls through to a source build (you'll
+see `node-gyp` running), install the platform's C/C++ toolchain first:
+
+| Platform | Command |
+|----------|---------|
+| macOS | `xcode-select --install` |
+| Debian / Ubuntu | `sudo apt-get install -y python3 make g++` |
+| Fedora / RHEL | `sudo dnf install -y python3 make gcc-c++` |
+| Windows | Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) + Python 3 |
+
+`@xterm/headless` is pure JavaScript and has no build prerequisites.
 
 ## How it works
 
@@ -181,6 +210,25 @@ all starting with the literal word `Yes`. Picker dialogs (ModelPicker,
 ThemePicker, settings) use `borderStyle: "single"`, so they're caught by the
 boxed-prompt branch. Claude Code's TUI is English-only as of writing, so
 these anchors are stable.
+
+## Privacy
+
+**klaude transmits your prompt to a translation backend on every Enter.**
+
+- **Haiku backend** (default): the prompt is sent to the Anthropic API over TLS.
+  Subject to Anthropic's data handling policy.
+- **Ollama backend**: the prompt is sent to your local Ollama host (default
+  `localhost:11434`). Nothing leaves your machine.
+
+klaude does **not** transmit anything else: file contents, environment
+variables (except `ANTHROPIC_API_KEY` used for Haiku auth), or text outside the
+visible input box. The only on-disk artifact klaude writes is the optional
+debug log at `~/.klaude/debug.log` (created only when `debug: true` and not
+rotated — disable with `klaude config set debug false`).
+
+Before pressing Enter, review your prompt for secrets, PII, and confidential
+code. Once submitted, klaude has no way to recall the transmission. For
+fully local operation, use the Ollama backend.
 
 ## Backends
 
