@@ -1,5 +1,5 @@
 {
-  "name": "@leviosa/klaude",
+  "name": "@leviosa-ai/klaude",
   "version": "0.1.0",
   "description": "Korean-native wrapper for Claude Code. Type Korean, Claude reads English, replies Korean.",
   "type": "module",

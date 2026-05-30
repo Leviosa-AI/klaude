@@ -105,7 +105,7 @@ Linux/Windows 사용자는 `KLAUDE_DUMP_POPUP=1`로 화면 덤프를 떠서 이�
 ## Install
 
 ```bash
-npm install -g @leviosa/klaude
+npm install -g @leviosa-ai/klaude
 ```
 
 npm 패키지는 Leviosa AI org 스코프로 게시되지만, 설치되는 실행 파일은
