@@ -1,9 +1,9 @@
 import type { Logger } from "./log.js";
-import type { PtyHandle } from "./pty.js";
 import type { ScreenMirror } from "./mirror.js";
+import type { PtyHandle } from "./pty.js";
+import { needsTranslation } from "./tokenize.js";
 import type { Translator } from "./translate.js";
 import { translatePrompt } from "./translate.js";
-import { needsTranslation } from "./tokenize.js";
 
 /**
  * Enter-time interception flow.
@@ -157,7 +157,9 @@ export class Interceptor {
     // dialog's own question text get swept into the submitted reply.
     // Skip intercept and let claude handle the Korean directly.
     if (this.deps.mirror.isPromptBoxed()) {
-      this.deps.logger.log("fast-path: boxed prompt (modal dialog), skipping translation");
+      this.deps.logger.log(
+        "fast-path: boxed prompt (modal dialog), skipping translation",
+      );
       return chunk;
     }
 
@@ -215,7 +217,7 @@ export class Interceptor {
     this.deps.logger.log("extracted input:", input);
     if (!input) {
       if (this.deps.logger.enabled && !DUMP_EVERY_ENTER) {
-        this.deps.logger.log("screen dump:\n" + this.deps.mirror.dumpScreen());
+        this.deps.logger.log(`screen dump:\n${this.deps.mirror.dumpScreen()}`);
       }
       return false;
     }
@@ -291,7 +293,7 @@ export class Interceptor {
  * Find a CR that signals "submit" — bare \r not preceded by ESC.
  * Returns -1 if no submit CR is in the chunk.
  */
-function findBareCR(chunk: string): number {
+export function findBareCR(chunk: string): number {
   for (let i = 0; i < chunk.length; i++) {
     if (chunk[i] !== CR) continue;
     if (i > 0 && chunk[i - 1] === ESC) continue; // Shift+Enter (ESC+CR)
@@ -333,7 +335,7 @@ function clearInput(pty: PtyHandle, input: string): void {
  * Claude Code's TUI is English-only as of writing (no locale flag), so
  * "Yes" is stable. If localization ever lands this will need updating.
  */
-function isSelectionMenuPrompt(text: string): boolean {
+export function isSelectionMenuPrompt(text: string): boolean {
   return /^\s*1\.\s+Yes\b/.test(text);
 }
 
@@ -346,14 +348,12 @@ function isSelectionMenuPrompt(text: string): boolean {
  * Matches: `[Image #1]`, `[Pasted text #2 +12 lines]`, etc.
  * Case-insensitive against future TUI tweaks.
  */
-function hasAttachmentMarker(text: string): boolean {
+export function hasAttachmentMarker(text: string): boolean {
   return /\[(?:Image|Pasted)\b[^\]]*\]/i.test(text);
 }
 
-function sanitizeForRetype(text: string): string {
-  return text
-    .replace(/\r\n/g, "\n")
-    .replace(/[\x00-\x09\x0b-\x1f]/g, "");
+export function sanitizeForRetype(text: string): string {
+  return text.replace(/\r\n/g, "\n").replace(/[\x00-\x09\x0b-\x1f]/g, "");
 }
 
 function sleep(ms: number): Promise<void> {
