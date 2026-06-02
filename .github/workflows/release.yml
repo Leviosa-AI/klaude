@@ -3,8 +3,10 @@ name: Release
 # Publishes to npm when a version tag (v*) is pushed.
 # Flow: merge to main -> `git tag vX.Y.Z && git push --tags` -> this runs.
 #
-# Requires repo secret NPM_TOKEN (npm "Automation" token).
-# Runs on macOS to match ci.yml, since the test suite is only verified there.
+# Auth: npm Trusted Publishing (OIDC) — no NPM_TOKEN needed. Requires a
+# Trusted Publisher to be configured on the npm package pointing at this
+# repo + workflow file (release.yml). Provenance is generated automatically
+# and requires the source repo to be PUBLIC.
 on:
   push:
     tags:
@@ -17,6 +19,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write # OIDC token for npm trusted publishing + provenance
 
 jobs:
   publish:
@@ -31,9 +34,12 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          node-version: 22 # resolves to >= 22.14, required for trusted publishing
           registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm >= 11.5.1; Node 22 ships npm 10.x.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
 
       - name: Install dependencies
         run: npm ci
@@ -47,11 +53,8 @@ jobs:
             exit 1
           fi
 
-      # `prepublishOnly` runs check + typecheck + test + build before packing.
-      # No --provenance: the source repo is INTERNAL and npm provenance
-      # requires a public repository. The package itself stays public via
-      # publishConfig.access in package.json.
+      # OIDC trusted publishing: no token. prepublishOnly re-runs
+      # check + typecheck + test + build before packing. access:public
+      # comes from publishConfig in package.json; provenance is automatic.
       - name: Publish
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish
