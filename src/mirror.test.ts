@@ -146,6 +146,60 @@ describe("ScreenMirror.isPromptBoxed", () => {
   });
 });
 
+describe("ScreenMirror.hasBashPrompt", () => {
+  it("detects bash mode active row even with a stale ❯ Korean prompt above", async () => {
+    const m = new ScreenMirror(80, 24);
+    await paint(m, [
+      "❯ 이전 한국어 메시지",
+      "─────────────",
+      "(claude's earlier response)",
+      "! git pull",
+      "─────────────",
+      "? for shortcuts",
+    ]);
+    expect(m.hasBashPrompt()).toBe(true);
+    // Documents the bug hasBashPrompt guards against: the bash row doesn't
+    // match PROMPT_LINE, so extractInputBox falls back to the stale Korean.
+    expect(m.extractInputBox()).toBe("이전 한국어 메시지");
+    m.dispose();
+  });
+
+  it("returns false for a normal ❯ Korean prompt (no regression)", async () => {
+    const m = new ScreenMirror(80, 24);
+    await paint(m, ["❯ 안녕하세요", "─────────────", "? for shortcuts"]);
+    expect(m.hasBashPrompt()).toBe(false);
+    m.dispose();
+  });
+
+  it("returns false for a bare empty prompt", async () => {
+    const m = new ScreenMirror(80, 24);
+    await paint(m, ["❯ ", "─────────────", "? for shortcuts"]);
+    expect(m.hasBashPrompt()).toBe(false);
+    m.dispose();
+  });
+
+  it("does not false-positive on an indented '! ' continuation line", async () => {
+    const m = new ScreenMirror(80, 24);
+    await paint(m, ["❯ 첫 줄", "  ! 둘째 줄", "─────────────"]);
+    expect(m.hasBashPrompt()).toBe(false);
+    m.dispose();
+  });
+
+  it("detects bash mode rendered inside a box edge (│ ! ...)", async () => {
+    const m = new ScreenMirror(80, 24);
+    await paint(m, ["│ ! echo hi", "─────────────"]);
+    expect(m.hasBashPrompt()).toBe(true);
+    m.dispose();
+  });
+
+  it("picks the bottom-most marker (bash row below an earlier ❯)", async () => {
+    const m = new ScreenMirror(80, 24);
+    await paint(m, ["❯ 위쪽", "...", "! ls", "─────────────"]);
+    expect(m.hasBashPrompt()).toBe(true);
+    m.dispose();
+  });
+});
+
 describe("ScreenMirror.resize", () => {
   it("updates cols/rows getters", () => {
     const m = new ScreenMirror(80, 24);

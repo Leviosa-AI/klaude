@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-06-02
+
+### Fixed
+
+- Bash-mode commands (input starting with `!`, e.g. `!git pull`) are no longer
+  intercepted or translated. In bash mode Claude Code swaps the `❯` prompt
+  marker for a `!`, which `PROMPT_LINE` didn't match — so `extractInputBox()`
+  fell back to a stale `❯ <korean>` row in scrollback and mis-translated,
+  clobbering the bash command. Added a `hasBashPrompt()` screen check plus an
+  extracted-text `!`-prefix guard, both running before the translate path.
+
 ## [0.1.1] - 2026-06-02
 
 ### Fixed

@@ -1,6 +1,6 @@
 {
   "name": "@leviosa-ai/klaude",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Korean-native wrapper for Claude Code. Type Korean, Claude reads English, replies Korean.",
   "type": "module",
   "bin": {

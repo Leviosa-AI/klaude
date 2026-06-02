@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   findBareCR,
   hasAttachmentMarker,
+  isBashPrefix,
   isSelectionMenuPrompt,
   sanitizeForRetype,
 } from "./intercept.js";
@@ -75,6 +76,26 @@ describe("hasAttachmentMarker", () => {
     expect(hasAttachmentMarker("[1, 2, 3]")).toBe(false);
     expect(hasAttachmentMarker("배열 [a, b]")).toBe(false);
     expect(hasAttachmentMarker("[INFO] something")).toBe(false);
+  });
+});
+
+describe("isBashPrefix", () => {
+  it("matches bash-mode commands (! first char)", () => {
+    expect(isBashPrefix("!git pull")).toBe(true);
+    expect(isBashPrefix("!ls")).toBe(true);
+  });
+
+  it("matches bash commands containing Korean (still pass through)", () => {
+    expect(isBashPrefix("!echo 안녕")).toBe(true);
+  });
+
+  it("does not match normal Korean prompts (no regression)", () => {
+    expect(isBashPrefix("안녕하세요")).toBe(false);
+    expect(isBashPrefix("git pull")).toBe(false);
+  });
+
+  it("does not match empty input", () => {
+    expect(isBashPrefix("")).toBe(false);
   });
 });
 
