@@ -83,6 +83,7 @@ if you'd written perfect English yourself.
 - Type Korean the way you think
 - `@path`, `/command`, code stay verbatim
 - Translated to English on Enter
+- **`Ctrl+Enter` sends your Korean as-is**, untranslated
 - Claude **replies in Korean**
 
 </td>
