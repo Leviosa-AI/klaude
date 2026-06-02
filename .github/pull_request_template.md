@@ -24,7 +24,7 @@
 ## Docs / Changelog
 
 - [ ] `README.md` updated (if user-visible behavior changed)
-- [ ] `README.ko.md` updated (if user-visible behavior changed)
+- [ ] `README.en.md` updated (if user-visible behavior changed)
 - [ ] `CHANGELOG.md` entry added under `## [Unreleased]`
 
 ## Notes for reviewers

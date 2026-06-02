@@ -50,7 +50,7 @@ rm -rf "$TMPHOME"
       then the English replacement before the prompt fires).
 - [ ] If you changed translator / mirror / intercept logic: add a unit test.
 - [ ] If you changed user-visible behavior: update `README.md` (and
-      `README.ko.md` if applicable).
+      `README.en.md` if applicable).
 - [ ] Add an entry under `## [Unreleased]` in `CHANGELOG.md`.
 
 ## Commit message format
