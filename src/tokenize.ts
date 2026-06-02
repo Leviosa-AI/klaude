@@ -40,7 +40,17 @@ const SINGLE_LINE_PATTERNS: Pattern[] = [
   { regex: new RegExp(`(^|\\s)\\/${CMD_BODY}`, "gu"), hasLeadAnchor: true },
 ];
 
-const CJK_RE = /[ㄱ-힝一-鿿぀-ヿ]/;
+/**
+ * Character class for the CJK scripts we translate from: Hiragana + Katakana
+ * (U+3040–U+30FF), Hangul compatibility jamo (U+3130–U+318F), CJK unified
+ * ideographs incl. Extension A (U+3400–U+4DBF, U+4E00–U+9FFF), and Hangul
+ * syllables (U+AC00–U+D7A3). Ranges are disjoint and ascending.
+ *
+ * The previous `[ㄱ-힝一-鿿぀-ヿ]` used `ㄱ-힝` = U+3131–U+D79D, an
+ * overly-large span that fully contained `一-鿿` (U+4E00–U+9FFF) and swept
+ * in many unrelated blocks — CodeQL flagged it as js/overly-large-range.
+ */
+export const CJK_RE = /[぀-ヿ㄰-㆏㐀-䶿一-鿿가-힣]/;
 
 /**
  * Thresholds for line-level masking of pasted logs / code / stack traces.
@@ -145,5 +155,5 @@ export function restore(translated: string, tokens: string[]): string {
  * If the line has no CJK characters, assume English/code — skip.
  */
 export function needsTranslation(input: string): boolean {
-  return /[ㄱ-힝一-鿿぀-ヿ]/.test(input);
+  return CJK_RE.test(input);
 }
