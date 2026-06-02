@@ -47,6 +47,9 @@ Code, and Claude reasons in English while replying in Korean. The TUI is untouch
 the translation latency hits once per prompt, and the answer quality is the same as
 if you'd written perfect English yourself.
 
+> 🐕 **Dogfooded:** klaude itself was built with klaude — developed in Korean,
+> reasoned in English.
+
 ## Before / After
 
 <table>
