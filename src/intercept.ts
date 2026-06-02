@@ -57,6 +57,15 @@ const RAW_SUBMIT_CHORD = /\x1b\[27;5;13~|\x1b\[13;5u/;
 const DUMP_EVERY_ENTER = process.env.KLAUDE_DUMP_POPUP === "1";
 
 /**
+ * When KLAUDE_DUMP_KEYS=1 is set, log the raw byte codes of EVERY keyboard
+ * chunk before any handling. Used to discover the exact escape sequence a
+ * given key chord (e.g. Ctrl+Enter) emits in a real klaude session, where
+ * the running `claude` may have switched the terminal's keyboard mode and
+ * changed the encoding from what a bare probe shows.
+ */
+const DUMP_KEYS = process.env.KLAUDE_DUMP_KEYS === "1";
+
+/**
  * How long to wait after the user presses Enter before reading the screen
  * mirror. Needed so claude's TUI finishes rendering the latest keystroke
  * (especially Tab-expansion of @mentions). Override via env var if the
@@ -106,6 +115,12 @@ export class Interceptor {
    *     "🔄 번역중..." indicator signals to stop typing.
    */
   async handleKeyInput(chunk: string): Promise<string> {
+    if (DUMP_KEYS) {
+      this.deps.logger.log(
+        `raw key bytes: ${JSON.stringify(Array.from(chunk, (c) => c.charCodeAt(0)))}`,
+      );
+    }
+
     if (this.busy) return this.dropAll(chunk, "busy");
 
     // RAW SUBMIT (Ctrl+Enter): submit the current input untranslated. The
