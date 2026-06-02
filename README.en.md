@@ -438,6 +438,9 @@ klaude uninstall-rules
 | `ANTHROPIC_API_KEY` | Required for the Haiku backend |
 | `KLAUDE_BACKEND` | `haiku` or `ollama:<model>` — overrides config file |
 | `OLLAMA_HOST` | Defaults to `http://localhost:11434` |
+| `KLAUDE_RENDER_DELAY` | Milliseconds to wait after Enter before reading the screen. Default `80` |
+| `KLAUDE_DUMP_KEYS` | `=1` logs raw keyboard byte codes to the debug log (also enables logging on its own). Diagnoses key-chord encodings — e.g. Ctrl+Enter |
+| `KLAUDE_DUMP_POPUP` | `=1` dumps the screen on every Enter. Diagnoses the autocomplete-popup detector |
 
 ## Development
 

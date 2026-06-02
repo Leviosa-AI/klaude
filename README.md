@@ -412,6 +412,9 @@ klaude uninstall-rules
 | `ANTHROPIC_API_KEY` | Haiku 백엔드 사용 시 필수 |
 | `KLAUDE_BACKEND` | `haiku` 또는 `ollama:<model>` — 설정 파일보다 우선 |
 | `OLLAMA_HOST` | 기본 `http://localhost:11434` |
+| `KLAUDE_RENDER_DELAY` | Enter 후 화면을 읽기까지 대기 시간(ms). 기본 `80` |
+| `KLAUDE_DUMP_KEYS` | `=1`이면 키 입력 바이트를 디버그 로그에 기록합니다(로깅도 자동 활성화). 키 조합 인코딩 진단용 — 예: Ctrl+Enter |
+| `KLAUDE_DUMP_POPUP` | `=1`이면 Enter 시점마다 화면 덤프를 기록합니다. 자동완성 popup 감지 진단용 |
 
 ## Development
 
