@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Ctrl+Enter` submits the current input untranslated — the original Korean
+  reaches Claude verbatim (no `Respond in Korean.` suffix either). Terminals
+  encode `Ctrl+Enter` as a distinct CSI sequence (`\x1b[27;5;13~`, or
+  `\x1b[13;5u` under the Kitty protocol) rather than a bare CR, so it's caught
+  before the translate path with no collision against plain Enter / Shift+Enter.
+  (`Cmd+Enter` and `fn+Enter` can't be used — terminals swallow them or emit the
+  same bytes as plain Enter.)
+
 ## [0.1.2] - 2026-06-02
 
 ### Fixed

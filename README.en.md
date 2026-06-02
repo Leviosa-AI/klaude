@@ -183,6 +183,8 @@ Key properties:
   `-p`, model selectors) passes straight through to the real `claude` process.
 - **Bash mode respected.** Input starting with `!` runs as a Claude Code shell
   command and is never translated (see [Smart pass-through](#smart-pass-through)).
+- **Ctrl+Enter submits raw.** Press `Ctrl+Enter` to skip translation and send your
+  Korean through as-is (see [Submit raw](#submit-raw-ctrlenter)).
 
 ## Token preservation
 
@@ -236,6 +238,25 @@ input box, Claude Code enters bash mode and swaps the `❯` prompt marker for a
 extracted text) and passes the Enter through untouched — so `!git pull` and
 other shell commands run exactly as they would under raw Claude Code, even when
 they contain Korean (e.g. `!echo 안녕`).
+
+## Submit raw (Ctrl+Enter)
+
+Sometimes the translation reads awkwardly, or you deliberately want Claude to see
+the original Korean. For that, press **`Ctrl+Enter`** instead of plain `Enter` —
+klaude skips translation and submits your Korean **verbatim** (it doesn't even
+append `Respond in Korean.`).
+
+```
+Plain Enter:  이 변수 이름 그대로 둬   →   Keep this variable name as-is   (translated)
+Ctrl+Enter:   이 변수 이름 그대로 둬   →   이 변수 이름 그대로 둬           (verbatim)
+```
+
+Terminals send `Ctrl+Enter` not as a plain Enter (`\r`) but as a distinct escape
+sequence (`\x1b[27;5;13~`, or `\x1b[13;5u` under the Kitty protocol), which lets
+klaude tell it apart from plain Enter and Shift+Enter with no collision. For the
+record, `Cmd+Enter` and `fn+Enter` can't be used as triggers — the terminal
+either swallows them or sends bytes identical to plain Enter — which is why
+`Ctrl+Enter` is the chosen chord.
 
 ## Privacy
 

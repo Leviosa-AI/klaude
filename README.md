@@ -173,6 +173,8 @@ claude 출력 ←─── node-pty ────────┘
   실제 `claude` 프로세스로 그대로 넘깁니다.
 - **bash 모드 존중.** `!`로 시작하는 입력은 Claude Code 셸 명령으로 실행되며 번역하지 않습니다
   ([Smart pass-through](#smart-pass-through) 참고).
+- **Ctrl+Enter로 원문 제출.** 번역을 건너뛰고 한국어를 그대로 보내고 싶을 때는 `Ctrl+Enter`를
+  누르면 됩니다 ([원문 그대로 보내기](#원문-그대로-보내기-ctrlenter) 참고).
 
 ## Token preservation
 
@@ -219,6 +221,23 @@ klaude는 **사용자가 입력한 것**만 번역합니다. Claude Code의 conf
 fallback으로 추출 텍스트의 `!` 접두사)를 감지해 Enter를 그대로 통과시킵니다 — 그래서
 `!git pull` 같은 셸 명령은 한국어가 섞여 있어도(`!echo 안녕`) raw Claude Code와 똑같이
 실행됩니다.
+
+## 원문 그대로 보내기 (Ctrl+Enter)
+
+번역이 어색하거나, 한국어를 일부러 그대로 Claude에게 보여주고 싶을 때가 있습니다. 그럴 때는
+일반 `Enter` 대신 **`Ctrl+Enter`**를 누르면 됩니다 — klaude가 번역을 건너뛰고 입력한 한국어를
+**원문 그대로** 제출합니다 (끝에 `Respond in Korean.`도 붙이지 않습니다).
+
+```
+일반 Enter:   이 변수 이름 그대로 둬   →   Keep this variable name as-is   (번역됨)
+Ctrl+Enter:   이 변수 이름 그대로 둬   →   이 변수 이름 그대로 둬           (원문 그대로)
+```
+
+터미널은 `Ctrl+Enter`를 일반 Enter(`\r`)가 아니라 고유한 escape 시퀀스(`\x1b[27;5;13~`
+또는 Kitty 프로토콜의 `\x1b[13;5u`)로 보냅니다. 덕분에 klaude가 일반 Enter·Shift+Enter와
+충돌 없이 명확하게 구분해 처리할 수 있습니다. 참고로 `Cmd+Enter`·`fn+Enter`는 터미널이
+앱으로 전달하지 않거나 일반 Enter와 동일한 바이트라 트리거로 쓸 수 없어, `Ctrl+Enter`를
+선택했습니다.
 
 ## Privacy
 
