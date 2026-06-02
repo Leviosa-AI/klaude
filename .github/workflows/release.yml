@@ -17,7 +17,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write # enables npm provenance for the public package
 
 jobs:
   publish:
@@ -49,7 +48,10 @@ jobs:
           fi
 
       # `prepublishOnly` runs check + typecheck + test + build before packing.
+      # No --provenance: the source repo is INTERNAL and npm provenance
+      # requires a public repository. The package itself stays public via
+      # publishConfig.access in package.json.
       - name: Publish
-        run: npm publish --provenance --access public
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
