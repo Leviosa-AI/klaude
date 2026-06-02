@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-02
+
+### Fixed
+
+- `build` script now sets the executable bit on `dist/index.js`
+  (`tsc && chmod +x dist/index.js`). `tsc` strips the execute permission on
+  compile, which left the `klaude` bin non-executable and caused
+  `zsh: permission denied: klaude` when launching via the global symlink.
+
 ## [0.1.0] - 2026-05-30
 
 First public release on npm.

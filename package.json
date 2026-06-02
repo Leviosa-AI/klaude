@@ -1,13 +1,13 @@
 {
   "name": "@leviosa-ai/klaude",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Korean-native wrapper for Claude Code. Type Korean, Claude reads English, replies Korean.",
   "type": "module",
   "bin": {
     "klaude": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/index.js",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "test": "vitest run",
