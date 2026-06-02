@@ -121,8 +121,15 @@ run `claude`:
 
 ```bash
 klaude                  # Launches Claude Code with the intercept layer
+klaude --resume         # Resume a previous session (any claude flag is forwarded)
 klaude --help
 ```
+
+Any flag klaude doesn't own is forwarded verbatim to `claude` — so session
+flags like `--resume` / `--continue`, `-p "<prompt>"`, and model selectors all
+work with the translation layer active. klaude only intercepts its own
+subcommands (`config`, `glossary`, `install-rules`, `uninstall-rules`,
+`--version`, `--help`).
 
 > **First run:** klaude will offer to add four token-discipline rules to your
 > global `~/.claude/CLAUDE.md`. The prompt defaults to **No** and klaude works
@@ -154,7 +161,7 @@ claude output  ←─── node-pty ────────┘
                   │
    Enter detected → extract input box → protect tokens → Haiku / Ollama
                                                             │
-                          Ctrl+U → retype in English → Enter ←
+                  clear box → paste English translation → Enter ←
 ```
 
 Key properties:
@@ -169,6 +176,10 @@ Key properties:
   afterward.
 - **Korean responses.** klaude quietly appends `Respond in Korean.` to the
   translated prompt.
+- **Flags forwarded.** Any flag klaude doesn't own (`--resume`, `--continue`,
+  `-p`, model selectors) passes straight through to the real `claude` process.
+- **Bash mode respected.** Input starting with `!` runs as a Claude Code shell
+  command and is never translated (see [Smart pass-through](#smart-pass-through)).
 
 ## Token preservation
 
@@ -203,6 +214,7 @@ intact.
 | Confirmation menu (`1. Yes` …) | Prompt content starts with `1. Yes` | Pass-through (CR selects the menu item) |
 | Image / pasted-text attachment | `[Image #N]` / `[Pasted text #N]` marker present | Pass-through (clear+retype would destroy the attached object) |
 | Modal dialog (pickers, etc.) | Prompt rendered inside box border (`│ ❯ …`) | Pass-through (modal editors don't honor our retype) |
+| Bash mode (`!cmd`) | Input's first char is `!` — Claude Code swaps the `❯` marker for `!` | Pass-through (Claude Code runs it as a shell command — never translated) |
 
 The `1. Yes` anchor covers every confirmation/permission menu we found in
 Claude Code's compiled binary — option 1 has eight variants (`Yes`,
@@ -214,6 +226,13 @@ all starting with the literal word `Yes`. Picker dialogs (ModelPicker,
 ThemePicker, settings) use `borderStyle: "single"`, so they're caught by the
 boxed-prompt branch. Claude Code's TUI is English-only as of writing, so
 these anchors are stable.
+
+**Bash mode** is handled the same way. When `!` is the first character of the
+input box, Claude Code enters bash mode and swaps the `❯` prompt marker for a
+`!`. klaude detects that swapped marker (and, as a fallback, a `!`-prefix on the
+extracted text) and passes the Enter through untouched — so `!git pull` and
+other shell commands run exactly as they would under raw Claude Code, even when
+they contain Korean (e.g. `!echo 안녕`).
 
 ## Privacy
 
@@ -227,8 +246,8 @@ these anchors are stable.
 klaude does **not** transmit anything else: file contents, environment
 variables (except `ANTHROPIC_API_KEY` used for Haiku auth), or text outside the
 visible input box. The only on-disk artifact klaude writes is the optional
-debug log at `~/.klaude/debug.log` (created only when `debug: true` and not
-rotated — disable with `klaude config set debug false`).
+debug log at `~/.klaude/debug.log` (created only when `debug: true`, rotated at
+10 MB to `debug.log.old` — disable with `klaude config set debug false`).
 
 Before pressing Enter, review your prompt for secrets, PII, and confidential
 code. Once submitted, klaude has no way to recall the transmission. For
@@ -342,6 +361,11 @@ klaude uninstall-rules   # remove just the marked block
 klaude                              # Launch Claude Code (intercept ON)
 klaude --version
 klaude --help
+
+# Passthrough — any flag klaude doesn't own goes straight to claude
+klaude --resume                     # resume a previous session
+klaude --continue                   # continue the most recent session
+klaude -p "fix the failing build"   # headless / print mode
 
 # Config
 klaude config get

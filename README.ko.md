@@ -115,8 +115,14 @@ npm 패키지는 Leviosa AI org 스코프로 게시되지만, 설치되는 실�
 
 ```bash
 klaude                  # Claude Code 그대로 실행, 인터셉트 활성
+klaude --resume         # 이전 세션 재개 (claude 플래그는 그대로 전달됨)
 klaude --help
 ```
+
+klaude가 자기 서브커맨드(`config`, `glossary`, `install-rules`,
+`uninstall-rules`, `--version`, `--help`)로 인식하지 않는 플래그는 모두
+`claude`로 그대로 전달된다 — 따라서 `--resume` / `--continue`,
+`-p "<프롬프트>"`, 모델 선택 플래그 등이 번역 레이어와 함께 정상 동작한다.
 
 > **First run:** 처음 실행하면 토큰 절약 규칙 4개를 글로벌 `~/.claude/CLAUDE.md`에
 > 추가할지 묻는다. 기본값은 No, 거부해도 klaude는 정상 동작한다. ([자세히](#token-discipline-rules))
@@ -147,7 +153,7 @@ claude 출력 ←─── node-pty ────────┘
                   │
    Enter 감지 → 입력칸 추출 → 토큰 보호 → Haiku / Ollama
                                               │
-                  Ctrl+U → 영문 retype → Enter ←
+              입력칸 비우기 → 영문 번역 paste → Enter ←
 ```
 
 핵심:
@@ -158,6 +164,10 @@ claude 출력 ←─── node-pty ────────┘
   (Tab으로 확장된 `@path`까지 정확히 캡처).
 - **선택적 번역.** 한국어 부분만 영어로, 영어/코드/경로/URL은 placeholder로 보호한 뒤 복원.
 - **한국어 응답.** 번역 끝에 `Respond in Korean.`을 조용히 붙임.
+- **플래그 전달.** klaude가 자기 것이 아닌 플래그(`--resume`, `--continue`,
+  `-p`, 모델 선택)는 실제 `claude` 프로세스로 그대로 넘김.
+- **bash 모드 존중.** `!`로 시작하는 입력은 Claude Code 셸 명령으로 실행되며
+  번역하지 않음 ([Smart pass-through](#smart-pass-through) 참고).
 
 ## Token preservation
 
@@ -190,6 +200,7 @@ popup, 모달 다이얼로그, 이미지 첨부 등은 Enter 가 그대로 통�
 | Confirmation 메뉴 (`1. Yes` …) | prompt 내용이 `1. Yes` 로 시작 | 패스스루 (CR 이 메뉴 항목 선택) |
 | 이미지 / 붙여넣은 텍스트 첨부 | `[Image #N]` / `[Pasted text #N]` 마커 존재 | 패스스루 (지우고 재타이핑하면 첨부 객체가 사라짐) |
 | 모달 다이얼로그 (picker 등) | prompt 가 박스 안에 렌더 (`│ ❯ …`) | 패스스루 (모달 에디터는 우리 retype 을 안 받음) |
+| Bash 모드 (`!명령`) | 입력 첫 글자가 `!` — Claude Code 가 `❯` 마커를 `!` 로 교체 | 패스스루 (Claude Code 가 셸 명령으로 실행 — 번역 안 함) |
 
 `1. Yes` 앵커는 Claude Code 컴파일된 바이너리에서 추출한 모든
 confirmation/permission 메뉴를 커버한다 — 옵션 1 의 8 가지 변형
@@ -199,6 +210,12 @@ confirmation/permission 메뉴를 커버한다 — 옵션 1 의 8 가지 변형
 모두 literal `Yes` 로 시작. Picker 다이얼로그 (ModelPicker / ThemePicker / settings)
 는 `borderStyle: "single"` 을 써서 boxed-prompt 분기에서 catch. Claude Code TUI
 는 영어 전용이라 이 앵커들은 안정적.
+
+**Bash 모드**도 같은 방식으로 처리된다. 입력칸 첫 글자가 `!` 이면 Claude Code
+가 bash 모드로 전환되며 `❯` 프롬프트 마커를 `!` 로 바꾼다. klaude는 이 바뀐
+마커(그리고 fallback 으로 추출 텍스트의 `!` 접두사)를 감지해 Enter 를 그대로
+통과시킨다 — 따라서 `!git pull` 같은 셸 명령은 한국어가 섞여 있어도
+(`!echo 안녕`) raw Claude Code 와 똑같이 실행된다.
 
 ## Privacy
 
@@ -212,7 +229,7 @@ confirmation/permission 메뉴를 커버한다 — 옵션 1 의 8 가지 변형
 klaude는 그 외 어떤 것도 전송하지 않는다 — 파일 내용, 환경 변수(`Haiku` 인증용
 `ANTHROPIC_API_KEY` 제외), 입력박스 바깥의 텍스트 모두 해당 없음. 디스크에
 남는 유일한 산출물은 옵션 디버그 로그 `~/.klaude/debug.log` 뿐 (`debug: true`
-일 때만 생성, 회전 없음 — `klaude config set debug false` 로 비활성).
+일 때만 생성, 10MB 에서 `debug.log.old` 로 회전 — `klaude config set debug false` 로 비활성).
 
 Enter를 누르기 전에 시크릿/PII/기밀 코드가 프롬프트에 들어있지 않은지 확인할 것.
 전송 후에는 klaude가 되돌릴 수 없다. 완전 로컬 운용을 원하면 Ollama 백엔드 사용.
@@ -317,6 +334,11 @@ klaude uninstall-rules   # 마커 블록만 제거
 klaude                              # Claude Code 실행 (인터셉트 ON)
 klaude --version
 klaude --help
+
+# 패스스루 — klaude 자기 것이 아닌 플래그는 claude 로 그대로 전달
+klaude --resume                     # 이전 세션 재개
+klaude --continue                   # 가장 최근 세션 이어가기
+klaude -p "빌드 에러 고쳐줘"          # 헤드리스 / print 모드
 
 # 설정
 klaude config get
