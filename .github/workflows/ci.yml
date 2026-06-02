@@ -6,6 +6,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least-privilege GITHUB_TOKEN: CI only reads the repo (checkout + npm).
+# No write scopes are needed here; release.yml requests its own.
+permissions:
+  contents: read
+
 # Only macOS is in the matrix — Linux/Windows are not yet verified end-to-end
 # against Claude Code's TUI. Once we validate those platforms (PTY behavior,
 # node-pty prebuilt binaries, Claude Code resolution paths), add them here.

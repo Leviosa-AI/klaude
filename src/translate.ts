@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Backend, Config } from "./config.js";
-import { needsTranslation, protect, restore } from "./tokenize.js";
+import { CJK_RE, needsTranslation, protect, restore } from "./tokenize.js";
 
 export interface Glossary {
   /** Ordered pairs: [koreanForm, canonicalEnglish]. */
@@ -287,7 +287,7 @@ function isMissingInputContent(input: string, output: string): boolean {
  * so a real English translation should land near 0% CJK.
  */
 function looksUntranslated(text: string): boolean {
-  const cjk = text.match(/[ㄱ-힝一-鿿぀-ヿ]/g)?.length ?? 0;
+  const cjk = text.match(new RegExp(CJK_RE.source, "g"))?.length ?? 0;
   const nonWs = text.replace(/\s/g, "").length;
   if (nonWs === 0) return false;
   return cjk / nonWs > 0.3;
