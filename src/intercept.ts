@@ -35,11 +35,35 @@ const BPASTE_START = "\x1b[200~";
 const BPASTE_END = "\x1b[201~";
 
 /**
+ * Ctrl+Enter "raw submit" chord — submit the current Korean input AS-IS,
+ * bypassing translation so the original Korean reaches Claude untouched.
+ *
+ * Why a chord works here when Cmd/Option/fn+Enter don't: terminals encode
+ * Ctrl+Enter as a CSI escape sequence, NOT a bare CR. So it's unambiguously
+ * distinct from plain Enter (`\r`), Shift+Enter (`\x1b\r`), and everything
+ * findBareCR inspects — no collision, reliably delivered to the PTY. Two
+ * encodings are accepted so it survives claude toggling keyboard modes:
+ *   - modifyOtherKeys (xterm):  ESC [ 27 ; 5 ; 13 ~   → \x1b[27;5;13~
+ *   - Kitty keyboard protocol:  ESC [ 13 ; 5 u        → \x1b[13;5u
+ * In both, modifier `5` = Ctrl (1 + Ctrl-bit 4) and key `13` = Enter.
+ */
+const RAW_SUBMIT_CHORD = /\x1b\[27;5;13~|\x1b\[13;5u/;
+
+/**
  * When KLAUDE_DUMP_POPUP=1 is set, dump screen + heuristic results on EVERY
  * Enter attempt (not just failures). Used to diagnose the autocomplete
  * popup detector by comparing dumps with popup open vs closed.
  */
 const DUMP_EVERY_ENTER = process.env.KLAUDE_DUMP_POPUP === "1";
+
+/**
+ * When KLAUDE_DUMP_KEYS=1 is set, log the raw byte codes of EVERY keyboard
+ * chunk before any handling. Used to discover the exact escape sequence a
+ * given key chord (e.g. Ctrl+Enter) emits in a real klaude session, where
+ * the running `claude` may have switched the terminal's keyboard mode and
+ * changed the encoding from what a bare probe shows.
+ */
+const DUMP_KEYS = process.env.KLAUDE_DUMP_KEYS === "1";
 
 /**
  * How long to wait after the user presses Enter before reading the screen
@@ -91,7 +115,26 @@ export class Interceptor {
    *     "🔄 번역중..." indicator signals to stop typing.
    */
   async handleKeyInput(chunk: string): Promise<string> {
+    if (DUMP_KEYS) {
+      this.deps.logger.log(
+        `raw key bytes: ${JSON.stringify(Array.from(chunk, (c) => c.charCodeAt(0)))}`,
+      );
+    }
+
     if (this.busy) return this.dropAll(chunk, "busy");
+
+    // RAW SUBMIT (Ctrl+Enter): submit the current input untranslated. The
+    // chord arrives as a CSI sequence, not a bare CR, so findBareCR below
+    // would see "no submit" and forward the raw escape to claude (which
+    // ignores it). Catch it HERE and turn it into a real submit that skips
+    // the translate path — the Korean already in the editor goes as-is.
+    if (isRawSubmitChord(chunk)) {
+      this.deps.logger.log(
+        "raw-submit chord (Ctrl+Enter): submitting input untranslated",
+      );
+      this.deps.pty.write(CR);
+      return "";
+    }
 
     const crIdx = findBareCR(chunk);
     if (crIdx === -1) return chunk;
@@ -379,6 +422,16 @@ export function hasAttachmentMarker(text: string): boolean {
  */
 export function isBashPrefix(text: string): boolean {
   return text.startsWith("!");
+}
+
+/**
+ * Does this keyboard chunk carry the Ctrl+Enter "raw submit" chord? When it
+ * does, klaude submits the current input untranslated (the original Korean
+ * reaches Claude verbatim) instead of running the translate path. See
+ * RAW_SUBMIT_CHORD for the accepted CSI encodings.
+ */
+export function isRawSubmitChord(chunk: string): boolean {
+  return RAW_SUBMIT_CHORD.test(chunk);
 }
 
 export function sanitizeForRetype(text: string): string {

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-06-02
+
+### Added
+
+- `Ctrl+Enter` submits the current input untranslated — the original Korean
+  reaches Claude verbatim (no `Respond in Korean.` suffix either). Terminals
+  encode `Ctrl+Enter` as a distinct CSI sequence (`\x1b[27;5;13~`, or
+  `\x1b[13;5u` under the Kitty protocol) rather than a bare CR, so it's caught
+  before the translate path with no collision against plain Enter / Shift+Enter.
+  (`Cmd+Enter` and `fn+Enter` can't be used — terminals swallow them or emit the
+  same bytes as plain Enter.)
+- `KLAUDE_DUMP_KEYS=1` logs raw keyboard byte codes to the debug log (and enables
+  logging on its own) — a diagnostic for discovering key-chord encodings.
+
+### Changed
+
+- README is now Korean-first (`README.md` Korean, `README.en.md` English), with
+  the Korean body rewritten in polite 존댓말. Documented `--resume` (and other)
+  claude flag passthrough, bash mode (`!`), and the debug env vars.
+
 ## [0.1.2] - 2026-06-02
 
 ### Fixed

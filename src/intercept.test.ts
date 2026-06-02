@@ -3,6 +3,7 @@ import {
   findBareCR,
   hasAttachmentMarker,
   isBashPrefix,
+  isRawSubmitChord,
   isSelectionMenuPrompt,
   sanitizeForRetype,
 } from "./intercept.js";
@@ -96,6 +97,34 @@ describe("isBashPrefix", () => {
 
   it("does not match empty input", () => {
     expect(isBashPrefix("")).toBe(false);
+  });
+});
+
+describe("isRawSubmitChord", () => {
+  it("matches the xterm modifyOtherKeys Ctrl+Enter encoding", () => {
+    expect(isRawSubmitChord("\x1b[27;5;13~")).toBe(true);
+  });
+
+  it("matches the Kitty keyboard-protocol Ctrl+Enter encoding", () => {
+    expect(isRawSubmitChord("\x1b[13;5u")).toBe(true);
+  });
+
+  it("does not match plain Enter (bare CR)", () => {
+    expect(isRawSubmitChord("\r")).toBe(false);
+  });
+
+  it("does not match Shift+Enter (ESC+CR)", () => {
+    expect(isRawSubmitChord("\x1b\r")).toBe(false);
+  });
+
+  it("does not match other CSI sequences (e.g. arrow keys)", () => {
+    expect(isRawSubmitChord("\x1b[A")).toBe(false); // up arrow
+    expect(isRawSubmitChord("\x1b[27;2;13~")).toBe(false); // Shift+Enter modifyOtherKeys
+  });
+
+  it("does not match empty or plain text", () => {
+    expect(isRawSubmitChord("")).toBe(false);
+    expect(isRawSubmitChord("안녕하세요")).toBe(false);
   });
 });
 

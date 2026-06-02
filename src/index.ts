@@ -62,7 +62,7 @@ async function main() {
 async function runClaude(claudeArgs: string[]) {
   const cfg = resolveBackendFromEnv(loadConfig());
   const translator = makeTranslator(cfg);
-  const logger = makeLogger(cfg.debug);
+  const logger = makeLogger(cfg.debug || process.env.KLAUDE_DUMP_KEYS === "1");
   logger.log("session start", { backend: cfg.backend.kind });
 
   const cols = process.stdout.columns || 120;
