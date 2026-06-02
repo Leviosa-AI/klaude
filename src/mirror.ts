@@ -163,6 +163,35 @@ export class ScreenMirror {
   }
 
   /**
+   * Is the active (bottom-most) input prompt in Claude Code's "bash mode"?
+   *
+   * Bash mode triggers when `!` is the first char of the input box; Claude
+   * Code swaps the `❯` marker for a magenta `!`, so the active row renders
+   * `! git pull` rather than `❯ git pull`. That row no longer matches
+   * PROMPT_LINE, so extractInputBox() would otherwise fall back to a STALE
+   * `❯ ...` row in scrollback (a previously-submitted Korean message) and
+   * mis-translate. Callers should skip intercept and pass the Enter through
+   * when this is true.
+   *
+   * We scan bottom-up and trust the FIRST prompt-marker row we hit —
+   * whichever of `❯` / `!` is closest to the bottom is the active prompt.
+   * In genuine bash mode the active `! ` row is the bottom-most marker and
+   * there is no `❯` below it, so this returns true. A multi-line input's
+   * `❯` marker sits on its FIRST physical row with indented continuation
+   * rows below — but BASH_PROMPT_LINE is column-anchored (no leading
+   * whitespace), so an indented `  ! ...` continuation won't be mistaken
+   * for the marker; the scan continues up to the real `❯` and returns false.
+   */
+  hasBashPrompt(): boolean {
+    const rows = this.snapshotRows();
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (BASH_PROMPT_LINE.test(rows[i])) return true;
+      if (PROMPT_LINE.test(rows[i])) return false; // bottom-most marker is normal ❯
+    }
+    return false;
+  }
+
+  /**
    * Heuristic: is an autocomplete popup currently visible?
    *
    * Claude Code shows file/command suggestions BELOW the prompt line.
@@ -240,6 +269,20 @@ export class ScreenMirror {
  * the optional box-edge `│` that the TUI sometimes draws.
  */
 const PROMPT_LINE = /^\s*(?:[│|]\s*)?❯\s/;
+
+/**
+ * Claude Code "bash mode" prompt marker. When the input box's first char is
+ * `!`, Claude Code enters bash mode and replaces the `❯` glyph with a
+ * magenta `!`, so the active row renders `! <command>` instead of
+ * `❯ <text>`. Unlike PROMPT_LINE this is COLUMN-ANCHORED (no leading `\s*`):
+ * a real bash marker sits at column 0 (after an optional box edge), whereas
+ * a multi-line continuation row is indented (`  ! ...`). Anchoring keeps an
+ * indented `! ` continuation from being mistaken for the marker — a slightly
+ * stricter stance than PROMPT_LINE, which is the safe direction (a missed
+ * bash detection is caught by the extracted-text `!`-prefix guard, but a
+ * false positive would corrupt a legitimate translation).
+ */
+const BASH_PROMPT_LINE = /^(?:[│|]\s)?!\s/;
 
 /**
  * Strip "❯ " from a prompt row. Uses a single replace with `❯ ` as the

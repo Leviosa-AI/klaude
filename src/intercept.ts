@@ -111,16 +111,34 @@ export class Interceptor {
       return chunk;
     }
 
+    // FAST PATH 1c: bash mode. When the input box's first char is `!`,
+    // Claude Code enters bash mode and swaps the `❯` marker for a magenta
+    // `!`. A `!` first-char ALWAYS means bash — a normal prompt can never
+    // begin with `!` — so this is an unambiguous, safe pass-through signal.
+    // We check the SCREEN here (not extracted text) because in bash-mode
+    // rendering the active row no longer matches PROMPT_LINE, so
+    // extractInputBox() would fall back to a stale `❯ <korean>` scrollback
+    // row and wrongly trigger translation. Must run BEFORE FAST PATH 2.
+    if (this.deps.mirror.hasBashPrompt()) {
+      this.deps.logger.log("fast-path: bash mode (! prompt), passing through CR");
+      return chunk;
+    }
+
     // FAST PATH 2: no Korean in current input. Covers plan-mode confirm
     // menus, slash-command navigation, empty Enter, English-only prompts.
     // The mirror is already accurate for normal keystrokes (only Tab
     // expansion needs the render-delay sleep) — so we can decide right
     // now without waiting. If null, the prompt area is showing a non-input
     // UI (confirm menu, etc), which also doesn't need translation.
+    //
+    // The `isBashPrefix` check is a belt-and-suspenders guard for a
+    // rendering where the `❯` marker is RETAINED and `!` is typed text
+    // (`❯ !git pull`): there hasBashPrompt() is false, but the extracted
+    // text begins with `!`, which still unambiguously means bash mode.
     const preInput = this.deps.mirror.extractInputBox();
-    if (!preInput || !needsTranslation(preInput)) {
+    if (!preInput || isBashPrefix(preInput) || !needsTranslation(preInput)) {
       this.deps.logger.log(
-        `fast-path: no Korean (input=${JSON.stringify(preInput?.slice(0, 60) ?? null)})`,
+        `fast-path: no Korean / bash-prefix (input=${JSON.stringify(preInput?.slice(0, 60) ?? null)})`,
       );
       return chunk;
     }
@@ -350,6 +368,17 @@ export function isSelectionMenuPrompt(text: string): boolean {
  */
 export function hasAttachmentMarker(text: string): boolean {
   return /\[(?:Image|Pasted)\b[^\]]*\]/i.test(text);
+}
+
+/**
+ * Does the extracted input box content start with `!`? In Claude Code a `!`
+ * first char ALWAYS means bash mode — a normal prompt can never begin with
+ * `!` — so this is an exact, safe pass-through signal. Note: no space is
+ * required after `!` because in the marker-retained rendering the typed
+ * text is `!git pull` (no space).
+ */
+export function isBashPrefix(text: string): boolean {
+  return text.startsWith("!");
 }
 
 export function sanitizeForRetype(text: string): string {
