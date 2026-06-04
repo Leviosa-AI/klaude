@@ -1,0 +1,91 @@
+name: Clone count
+
+# GitHub's Traffic API only retains the last 14 days of clone data and never
+# exposes a cumulative total. This workflow snapshots the clone count daily and
+# accumulates per-date totals on a dedicated `traffic-stats` orphan branch, then
+# writes a shields.io endpoint JSON that the README badge reads. Running daily
+# keeps every date inside the 14-day window, so no day is ever lost.
+
+on:
+  schedule:
+    - cron: "17 2 * * *" # daily at 02:17 UTC
+  workflow_dispatch:
+
+# contents: write is needed to push the accumulated snapshot to traffic-stats.
+permissions:
+  contents: write
+
+# Never run two accumulation jobs at once — they would race on the branch push.
+concurrency:
+  group: clone-count
+  cancel-in-progress: false
+
+jobs:
+  count:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch traffic and accumulate
+        env:
+          # The Traffic API requires push access. The default GITHUB_TOKEN works
+          # for repos where Actions has it; if you hit a 403, create a PAT with
+          # `repo` scope and add it as a secret named TRAFFIC_TOKEN.
+          GH_TOKEN: ${{ secrets.TRAFFIC_TOKEN || secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # --- 1. Pull the last 14 days of clone data ----------------------
+          curl -sf \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$REPO/traffic/clones" > fresh.json
+
+          # --- 2. Check out (or create) the storage branch ----------------
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          REMOTE="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/$REPO.git"
+
+          if git ls-remote --exit-code --heads "$REMOTE" traffic-stats >/dev/null 2>&1; then
+            git clone --depth 1 --branch traffic-stats "$REMOTE" stats
+          else
+            git clone --depth 1 "$REMOTE" stats
+            cd stats
+            git checkout --orphan traffic-stats
+            git rm -rf . >/dev/null 2>&1 || true
+            cd ..
+          fi
+          [ -f stats/clones.json ] || echo '{}' > stats/clones.json
+
+          # --- 3. Merge: keep the max observed count per date -------------
+          # Per-date max guards against partial same-day reads on the run that
+          # first sees a date vs. a later, fuller observation of it.
+          jq -n \
+            --slurpfile prev stats/clones.json \
+            --slurpfile fresh fresh.json '
+              ($prev[0]) as $p
+              | reduce $fresh[0].clones[] as $c ($p;
+                  ($c.timestamp[0:10]) as $d
+                  | .[$d] = ([ (.[$d] // 0), $c.count ] | max))
+            ' > merged.json
+          mv merged.json stats/clones.json
+
+          # --- 4. Sum all dates → cumulative total, write badge endpoint --
+          TOTAL=$(jq '[.[]] | add // 0' stats/clones.json)
+          echo "Cumulative clones: $TOTAL"
+          jq -n --arg total "$TOTAL" '{
+            schemaVersion: 1,
+            label: "clones",
+            message: $total,
+            color: "blue"
+          }' > stats/clone-badge.json
+
+          # --- 5. Commit & push only if something changed -----------------
+          cd stats
+          git add clones.json clone-badge.json
+          if git diff --cached --quiet; then
+            echo "No change; skipping push."
+          else
+            git commit -m "chore: clone count = $TOTAL"
+            git push "$REMOTE" HEAD:traffic-stats
+          fi

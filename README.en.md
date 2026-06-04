@@ -21,6 +21,8 @@
   <a href="https://www.npmjs.com/package/@leviosa-ai/klaude"><img src="https://img.shields.io/npm/v/@leviosa-ai/klaude.svg?color=red" alt="npm version"></a>
   <a href="https://www.npmjs.com/package/@leviosa-ai/klaude"><img src="https://img.shields.io/npm/dm/@leviosa-ai/klaude.svg" alt="npm downloads"></a>
   <a href="https://github.com/Leviosa-AI/klaude/actions/workflows/ci.yml"><img src="https://github.com/Leviosa-AI/klaude/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://hits.sh/github.com/Leviosa-AI/klaude/"><img src="https://hits.sh/github.com/Leviosa-AI/klaude.svg?label=views&color=blue" alt="Repo views"></a>
+  <a href="https://github.com/Leviosa-AI/klaude/graphs/traffic"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Leviosa-AI/klaude/traffic-stats/clone-badge.json" alt="Cumulative clones"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg" alt="Node">
   <img src="https://img.shields.io/badge/claude--code-compatible-orange.svg" alt="Claude Code">
