@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Pasting a few lines of English alongside a Korean question no longer drops the
+  Korean. Small local models (gemma3:4b) tend to echo a multi-line English block
+  verbatim and silently omit the Korean riding with it — and because the output
+  is valid English, the failure detector missed it. Line-level masking now
+  activates on any MIXED input (≥ 1 Korean line + ≥ 2 non-Korean lines) instead
+  of only on long (≥ 400-char) inputs, so the English lines are collapsed into
+  `{K…}` placeholders and only the Korean is translated; the English is restored
+  verbatim. Tune the char floor (now 0 by default) via `KLAUDE_LINE_MASK_MIN_CHARS`.
+
+### Added
+
+- The translator now receives Claude's recent on-screen output as a
+  terminology/disambiguation hint (reference only — never translated or echoed),
+  improving consistency on domain terms. Skipped on the first prompt of a session
+  (no prior Claude turn yet). Disable with `KLAUDE_NO_CONTEXT=1`; cap the hint
+  size with `KLAUDE_CONTEXT_CHARS` (default 1200).
+
 ## [0.1.3] - 2026-06-02
 
 ### Added

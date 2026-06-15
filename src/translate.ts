@@ -59,7 +59,35 @@ function renderGlossary(g: Glossary): string {
 }
 
 export interface Translator {
-  translate(text: string): Promise<string>;
+  /**
+   * Translate `text`. `context` is OPTIONAL recent-conversation text used
+   * purely as a terminology/disambiguation hint — it is never translated or
+   * echoed. Implementations append it to the system prompt as reference.
+   */
+  translate(text: string, context?: string): Promise<string>;
+}
+
+/**
+ * Build a "reference only" context section appended to the translator's
+ * system prompt. Kept firmly separate from the user message so the model
+ * doesn't translate or repeat it. Trimmed to the tail (most recent) and
+ * capped so it never dominates a small local model's context window.
+ */
+const MAX_CONTEXT_CHARS = Number(process.env.KLAUDE_CONTEXT_CHARS ?? 1200);
+
+function contextSection(context?: string): string {
+  if (!context) return "";
+  const trimmed = context.trim();
+  if (trimmed.length === 0) return "";
+  const clipped =
+    trimmed.length > MAX_CONTEXT_CHARS
+      ? trimmed.slice(trimmed.length - MAX_CONTEXT_CHARS)
+      : trimmed;
+  return (
+    `\n\nRECENT CONVERSATION (reference ONLY — for terminology and disambiguation). ` +
+    `Do NOT translate, repeat, summarize, or respond to it. Use it only to translate ` +
+    `the user's next message consistently:\n"""\n${clipped}\n"""`
+  );
 }
 
 export function makeTranslator(cfg: Config): Translator {
@@ -95,11 +123,11 @@ class HaikuTranslator implements Translator {
     this.system = SYSTEM_PROMPT(src, tgt, glossary);
   }
 
-  async translate(text: string): Promise<string> {
+  async translate(text: string, context?: string): Promise<string> {
     const res = await this.client.messages.create({
       model: this.model,
       max_tokens: 4096,
-      system: this.system,
+      system: this.system + contextSection(context),
       messages: [{ role: "user", content: text }],
     });
     const block = res.content.find((b) => b.type === "text");
@@ -126,7 +154,7 @@ class OllamaTranslator implements Translator {
     this.system = SYSTEM_PROMPT(src, tgt, glossary);
   }
 
-  async translate(text: string): Promise<string> {
+  async translate(text: string, context?: string): Promise<string> {
     const ctrl = new AbortController();
     const timeoutMs = Number(process.env.KLAUDE_OLLAMA_TIMEOUT_MS) || 30_000;
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -138,7 +166,7 @@ class OllamaTranslator implements Translator {
           model: this.model,
           stream: false,
           messages: [
-            { role: "system", content: this.system },
+            { role: "system", content: this.system + contextSection(context) },
             { role: "user", content: text },
           ],
         }),
@@ -168,10 +196,11 @@ export async function translatePrompt(
   sourceLang: string,
   onMissing?: (missing: string[]) => void,
   onUntranslated?: (stage: "first" | "retry", reason: string) => void,
+  context?: string,
 ): Promise<string> {
   if (!needsTranslation(text)) return text;
   const { masked, tokens } = protect(text);
-  let translated = await translator.translate(masked);
+  let translated = await translator.translate(masked, context);
 
   // Validate the translation against multiple failure modes that small
   // local models (gemma3:4b) routinely hit. Retry once with a stricter
@@ -186,6 +215,8 @@ export async function translatePrompt(
       `Do NOT include any Korean characters in your response. ` +
       `Do NOT copy from any prior examples — translate the actual input below. ` +
       `Preserve {K\\d+} tokens verbatim.\n\n${masked}`;
+    // Retry WITHOUT context: the stricter directive wants a focused, literal
+    // translation — extra reference text only risks re-confusing a small model.
     translated = await translator.translate(stricterInput);
     const retryFailure = detectTranslationFailure(masked, translated);
     if (retryFailure) {

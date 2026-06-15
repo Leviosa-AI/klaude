@@ -6,13 +6,18 @@ import { translatePrompt } from "./translate.js";
  * Build a mock Translator with a script: the n-th call returns the n-th item.
  * Allows simulating first-attempt + retry behavior.
  */
-function scriptedTranslator(responses: string[]): Translator & { calls: string[] } {
+function scriptedTranslator(
+  responses: string[],
+): Translator & { calls: string[]; contexts: Array<string | undefined> } {
   const calls: string[] = [];
+  const contexts: Array<string | undefined> = [];
   let i = 0;
   return {
     calls,
-    async translate(text: string): Promise<string> {
+    contexts,
+    async translate(text: string, context?: string): Promise<string> {
       calls.push(text);
+      contexts.push(context);
       const out = responses[Math.min(i, responses.length - 1)];
       i++;
       return out;
@@ -156,6 +161,43 @@ describe("translatePrompt — failure detection + retry", () => {
     // Fallback: original Korean (with Respond-in-Korean appended)
     expect(out).toContain("안녕");
     expect(out).toContain("Respond in Korean.");
+  });
+});
+
+describe("translatePrompt — conversation context hint", () => {
+  it("forwards context to the translator on the first attempt", async () => {
+    const t = scriptedTranslator(["Check the seller_id lookup"]);
+    await translatePrompt(
+      "seller_id 조회 확인해줘",
+      t,
+      "ko",
+      undefined,
+      undefined,
+      "We look up the approval by seller_id, not supabase_user_id.",
+    );
+    expect(t.contexts[0]).toContain("seller_id");
+  });
+
+  it("passes undefined context when none is provided", async () => {
+    const t = scriptedTranslator(["Hello"]);
+    await translatePrompt("안녕", t, "ko");
+    expect(t.contexts[0]).toBeUndefined();
+  });
+
+  it("does NOT forward context on the stricter retry", async () => {
+    // First attempt fails (CJK echo) → retry. Retry must omit context.
+    const t = scriptedTranslator(["여전히 한국어", "Proper English translation"]);
+    await translatePrompt(
+      "안녕하세요 그대로",
+      t,
+      "ko",
+      undefined,
+      undefined,
+      "some recent conversation context",
+    );
+    expect(t.calls).toHaveLength(2);
+    expect(t.contexts[0]).toContain("recent conversation");
+    expect(t.contexts[1]).toBeUndefined();
   });
 });
 
