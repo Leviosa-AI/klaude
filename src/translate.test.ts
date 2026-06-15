@@ -150,6 +150,49 @@ describe("translatePrompt — failure detection + retry", () => {
     expect(out).toContain("useState");
   });
 
+  it("catches a Korean echo even when English identifiers dilute the CJK ratio", async () => {
+    // Regression (0.1.5): the context-hint feature led gemma3:4b to
+    // regurgitate the reference text as a Korean question instead of
+    // translating "아니 product.upload.single, product.upload.bulk 2개".
+    // The English identifiers kept the raw CJK ratio under the old 30%
+    // threshold, so the all-Korean echo slipped through and was submitted.
+    const onUntranslated = vi.fn();
+    const t = scriptedTranslator([
+      "이 product.upload.single, product.upload.bulk 2개를 만들면 어떤 문제가 발생할까요?",
+      "No, just the two: product.upload.single, product.upload.bulk",
+    ]);
+    const out = await translatePrompt(
+      "아니 product.upload.single, product.upload.bulk 2개",
+      t,
+      "ko",
+      undefined,
+      onUntranslated,
+      "recent conversation about renaming product.upload",
+    );
+    expect(onUntranslated).toHaveBeenCalledWith("first", "CJK echo");
+    // Retry must drop the context that caused the regurgitation.
+    expect(t.contexts[1]).toBeUndefined();
+    expect(out).toContain("product.upload.single");
+    expect(out).toContain("product.upload.bulk");
+    expect(out).not.toContain("어떤 문제");
+  });
+
+  it("does NOT flag a mostly-English translation that keeps one Korean proper noun", async () => {
+    // The echo guard must not over-trigger: a real English translation that
+    // legitimately retains an untranslatable Korean name should pass.
+    const onUntranslated = vi.fn();
+    const t = scriptedTranslator(["What did 김민수 say about the deploy?"]);
+    const out = await translatePrompt(
+      "김민수가 배포에 대해 뭐래?",
+      t,
+      "ko",
+      undefined,
+      onUntranslated,
+    );
+    expect(onUntranslated).not.toHaveBeenCalled();
+    expect(out).toContain("What did 김민수 say");
+  });
+
   it("falls back to original input when both attempts fail", async () => {
     const onUntranslated = vi.fn();
     // Both attempts return Korean — total failure

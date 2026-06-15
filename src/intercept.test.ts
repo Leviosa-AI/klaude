@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  contextHintEligible,
   findBareCR,
   hasAttachmentMarker,
   isBashPrefix,
@@ -125,6 +126,22 @@ describe("isRawSubmitChord", () => {
   it("does not match empty or plain text", () => {
     expect(isRawSubmitChord("")).toBe(false);
     expect(isRawSubmitChord("안녕하세요")).toBe(false);
+  });
+});
+
+describe("contextHintEligible", () => {
+  it("rejects thin-Korean inputs that would let context hijack the model", () => {
+    // The 0.1.5 regression case: 3 Korean chars carrying English identifiers.
+    expect(
+      contextHintEligible("아니 product.upload.single, product.upload.bulk 2개"),
+    ).toBe(false);
+    expect(contextHintEligible("ㅇㅇ")).toBe(false);
+    expect(contextHintEligible("react 써")).toBe(false);
+  });
+
+  it("accepts substantive Korean prompts (default floor)", () => {
+    expect(contextHintEligible("리액트 컴포넌트에서 useState 어떻게 써")).toBe(true);
+    expect(contextHintEligible("이 PR 머지하기 전에 테스트 다시 돌려줘")).toBe(true);
   });
 });
 

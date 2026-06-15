@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { needsTranslation, protect, restore } from "./tokenize.js";
+import { cjkCharCount, needsTranslation, protect, restore } from "./tokenize.js";
 
 describe("needsTranslation", () => {
   it("detects Hangul", () => {
@@ -24,6 +24,25 @@ describe("needsTranslation", () => {
     expect(needsTranslation("git push origin main")).toBe(false);
     expect(needsTranslation("")).toBe(false);
     expect(needsTranslation("!@#$%^&*()")).toBe(false);
+  });
+});
+
+describe("cjkCharCount", () => {
+  it("counts only CJK characters, ignoring ASCII and punctuation", () => {
+    expect(cjkCharCount("안녕하세요")).toBe(5);
+    expect(cjkCharCount("hello world")).toBe(0);
+    expect(cjkCharCount("")).toBe(0);
+  });
+
+  it("counts Korean in identifier-heavy mixed input (thin-Korean signal)", () => {
+    // The regression input: only 3 Korean chars (아, 니, 개) riding English.
+    expect(cjkCharCount("아니 product.upload.single, product.upload.bulk 2개")).toBe(3);
+  });
+
+  it("counts every Korean syllable in a substantive prompt", () => {
+    expect(cjkCharCount("리액트 컴포넌트에서 useState 어떻게 써")).toBeGreaterThanOrEqual(
+      8,
+    );
   });
 });
 
