@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-06-15
+
 ### Fixed
 
 - Pasting a few lines of English alongside a Korean question no longer drops the
