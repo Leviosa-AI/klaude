@@ -132,10 +132,37 @@ describe("protect — large input line-level masking", () => {
     expect(masked).toContain("뭐가 문제야?");
   });
 
-  it("does NOT activate line-masking for short inputs", () => {
+  it("does NOT activate line-masking for a single stray non-Korean line", () => {
     const { tokens } = protect("이거 보고\nconst x = 1;\n어때?");
-    // Short input — fenced/inline/URL patterns may match but bulk mask shouldn't fire
-    // const x = 1; is not in a code fence, so should appear raw
+    // Only ONE non-Korean line (< MIN_NONKO_LINES) — masking shouldn't fire.
+    // const x = 1; is not in a code fence, so it should appear raw.
     expect(tokens.some((t) => t === "const x = 1;")).toBe(false);
+  });
+
+  it("masks a SHORT pasted English block riding alongside a Korean line", () => {
+    // Regression: 2-3 lines of pasted English + a Korean question, well
+    // under the old 400-char floor. Previously this went to the translator
+    // whole, and small models echoed the English and dropped the Korean.
+    // Now the English block is masked so only the Korean is translated.
+    const input = [
+      "The approval is stored keyed by supabase_user_id (during dry_run)",
+      "but looked up by seller_id, so the lookup misses for some sellers.",
+      "",
+      "라고 팀원이 얘기하네. 이거 우리 서버 문제야 카페24 문제야?",
+    ].join("\n");
+    const { masked, tokens } = protect(input);
+    // English block collapsed into a placeholder, Korean preserved inline.
+    const hasEnglishToken = tokens.some((t) => t.includes("supabase_user_id"));
+    expect(hasEnglishToken).toBe(true);
+    expect(masked).toContain("우리 서버 문제야");
+    expect(masked).not.toContain("supabase_user_id");
+  });
+
+  it("does NOT mask when every line already contains Korean", () => {
+    // All lines have Korean → nothing to protect, masking is a no-op.
+    const input = "첫 줄 봐줘\n둘째 줄도 봐줘\n셋째 줄 고쳐줘";
+    const { masked, tokens } = protect(input);
+    expect(tokens).toEqual([]);
+    expect(masked).toBe(input);
   });
 });

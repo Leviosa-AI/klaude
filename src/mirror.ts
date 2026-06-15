@@ -121,6 +121,51 @@ export class ScreenMirror {
   }
 
   /**
+   * Recent conversation text shown ABOVE the active input box — used as a
+   * terminology/context hint for the translator so it disambiguates domain
+   * terms the way Claude just did (e.g. keeps `seller_id` rather than
+   * inventing a synonym). Returns the lines closest to the prompt (Claude's
+   * most recent output), newest-last, capped to `maxChars`.
+   *
+   * Best-effort and intentionally loose: we strip dividers, blank rows, and
+   * the status bar, but otherwise pass rendered text through. Noise here is
+   * harmless — the translator prompt treats this strictly as reference and
+   * never echoes or translates it. Returns null when there's nothing above
+   * the prompt yet (e.g. the very first turn shows only the welcome banner,
+   * which the caller skips anyway).
+   */
+  recentContext(maxLines = 24, maxChars = 1200): string | null {
+    const rows = this.snapshotRows();
+
+    let promptIdx = -1;
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (PROMPT_LINE.test(rows[i])) {
+        promptIdx = i;
+        break;
+      }
+    }
+    const end = promptIdx === -1 ? rows.length : promptIdx;
+
+    // Walk UP from just above the prompt, collecting real content rows.
+    const collected: string[] = [];
+    for (let i = end - 1; i >= 0 && collected.length < maxLines; i--) {
+      const row = rows[i];
+      const trimmed = row.trim();
+      if (trimmed.length === 0) continue;
+      if (isDividerLine(row)) continue;
+      if (looksLikeStatusBar(row)) continue;
+      collected.push(trimmed);
+    }
+    if (collected.length === 0) return null;
+
+    collected.reverse(); // chronological: oldest first, Claude's latest last
+    let text = collected.join("\n");
+    // Keep the TAIL (most recent, closest to the prompt) if over budget.
+    if (text.length > maxChars) text = text.slice(text.length - maxChars);
+    return text;
+  }
+
+  /**
    * Detect Claude Code's interactive checklist/form widget. These appear
    * when claude asks the user a structured multi-choice question and
    * render a top header containing a `✓ Submit` button along with

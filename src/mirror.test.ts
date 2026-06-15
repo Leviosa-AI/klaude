@@ -200,6 +200,54 @@ describe("ScreenMirror.hasBashPrompt", () => {
   });
 });
 
+describe("ScreenMirror.recentContext", () => {
+  it("returns null when there is nothing above the prompt", async () => {
+    const m = new ScreenMirror(80, 24);
+    await paint(m, ["❯ 안녕", "─────────────", "? for shortcuts"]);
+    expect(m.recentContext()).toBeNull();
+    m.dispose();
+  });
+
+  it("collects Claude's recent output above the prompt, newest last", async () => {
+    const m = new ScreenMirror(80, 24);
+    await paint(m, [
+      "⏺ The approval is looked up by seller_id.",
+      "⏺ supabase_user_id is only used during dry_run.",
+      "─────────────",
+      "❯ 이거 확인해줘",
+      "─────────────",
+      "? for shortcuts",
+    ]);
+    const ctx = m.recentContext();
+    expect(ctx).not.toBeNull();
+    expect(ctx).toContain("seller_id");
+    expect(ctx).toContain("supabase_user_id");
+    // The user's own current input must NOT be included.
+    expect(ctx).not.toContain("이거 확인해줘");
+    // Chronological order: earlier line before later line.
+    expect((ctx as string).indexOf("seller_id")).toBeLessThan(
+      (ctx as string).indexOf("dry_run"),
+    );
+    m.dispose();
+  });
+
+  it("skips dividers and the status bar", async () => {
+    const m = new ScreenMirror(80, 24);
+    await paint(m, [
+      "⏺ relevant context line",
+      "─────────────────────",
+      "❯ 질문",
+      "? for shortcuts · esc to interrupt",
+    ]);
+    const ctx = m.recentContext();
+    // Single content line survives; divider and status bar are dropped.
+    expect(ctx).toContain("relevant context line");
+    expect(ctx).not.toContain("─");
+    expect(ctx).not.toContain("shortcuts");
+    m.dispose();
+  });
+});
+
 describe("ScreenMirror.resize", () => {
   it("updates cols/rows getters", () => {
     const m = new ScreenMirror(80, 24);

@@ -90,9 +90,20 @@ export interface InterceptDeps {
   logger: Logger;
 }
 
+/** Opt out of passing Claude's recent output as a translation hint. */
+const CONTEXT_DISABLED = process.env.KLAUDE_NO_CONTEXT === "1";
+
 export class Interceptor {
   private deps: InterceptDeps;
   private busy = false;
+  /**
+   * How many Korean prompts we've translated this session. Used to gate the
+   * conversation-context hint: the FIRST translated prompt has no prior
+   * Claude turn to learn from (the screen shows only the welcome banner), so
+   * we skip context then and attach it from the second prompt onward — the
+   * "except for the very first time" behavior the user asked for.
+   */
+  private translatedCount = 0;
 
   constructor(deps: InterceptDeps) {
     this.deps = deps;
@@ -287,6 +298,15 @@ export class Interceptor {
       return false;
     }
 
+    // Grab Claude's recent output as a terminology hint BEFORE we mutate
+    // the input box (indicator/clear). Skipped on the first translated
+    // prompt (no prior Claude turn) and when disabled via env.
+    const context =
+      CONTEXT_DISABLED || this.translatedCount === 0
+        ? undefined
+        : (this.deps.mirror.recentContext() ?? undefined);
+    this.translatedCount++;
+
     // Show a "translating" indicator in the input box so the user gets
     // immediate visual feedback. The slow part is the translation call
     // itself (Ollama gemma3:4b ~1-4s); without this the user just sees
@@ -320,7 +340,9 @@ export class Interceptor {
               : `translation failed AGAIN (${reason}) after retry — submitting original input (Claude is multilingual)`,
           );
         },
+        context,
       );
+      if (context) this.deps.logger.log("context hint chars:", String(context.length));
       this.deps.logger.log("translated:", translated);
 
       // Wipe the indicator and the original Korean in one shot.

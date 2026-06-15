@@ -54,13 +54,26 @@ export const CJK_RE = /[぀-ヿ㄰-㆏㐀-䶿一-鿿가-힣]/;
 
 /**
  * Thresholds for line-level masking of pasted logs / code / stack traces.
- * Activates only when input is long AND has enough non-Korean lines worth
- * hiding from the translator. Tuned to avoid kicking in on normal-length
- * prompts (a typical Korean question is < 200 chars).
+ *
+ * Activates on MIXED input: at least one Korean line to translate AND a
+ * couple of non-Korean lines worth hiding from the translator. The English
+ * lines get collapsed into {K\d+} placeholders so the translator sees only
+ * the Korean — it translates that, and the English is restored verbatim.
+ *
+ * Why this matters: small local models (gemma3:4b) routinely ECHO a pasted
+ * multi-line English block and silently DROP the Korean question riding
+ * alongside it — the output looks fine (valid English) so the failure
+ * detector misses it. Masking the English away removes the temptation: the
+ * model only ever sees the Korean. This is also exactly the user intent —
+ * "keep the English as-is, translate only the Korean."
+ *
+ * The char floor defaults to 0 (line composition is the real gate); a
+ * single stray code line between Korean lines stays inline because masking
+ * needs ≥ 2 non-Korean lines to trip. Override the floor via env for tuning.
  */
-const LINE_MASK_MIN_CHARS = Number(process.env.KLAUDE_LINE_MASK_MIN_CHARS) || 400;
-const LINE_MASK_MIN_LINES = 5;
-const LINE_MASK_MIN_NONKO_LINES = 3;
+const LINE_MASK_MIN_CHARS = Number(process.env.KLAUDE_LINE_MASK_MIN_CHARS ?? 0);
+const LINE_MASK_MIN_LINES = 2;
+const LINE_MASK_MIN_NONKO_LINES = 2;
 
 export function protect(input: string): ProtectResult {
   const tokens: string[] = [];
@@ -106,12 +119,16 @@ function shouldMaskNonKoreanLines(text: string): boolean {
   const lines = text.split("\n");
   if (lines.length < LINE_MASK_MIN_LINES) return false;
   let nonKo = 0;
+  let ko = 0;
   for (const l of lines) {
     if (l.trim().length === 0) continue;
-    if (!CJK_RE.test(l)) nonKo++;
-    if (nonKo >= LINE_MASK_MIN_NONKO_LINES) return true;
+    if (CJK_RE.test(l)) ko++;
+    else nonKo++;
   }
-  return false;
+  // Mixed input only: at least one Korean line to translate AND enough
+  // non-Korean lines worth protecting. If there's no Korean line, the
+  // whole input wouldn't reach translation anyway (needsTranslation gate).
+  return ko >= 1 && nonKo >= LINE_MASK_MIN_NONKO_LINES;
 }
 
 /**
