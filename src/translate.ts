@@ -270,7 +270,7 @@ const KNOWN_EXAMPLE_OUTPUTS = new Set([
  *      paraphrase drops the input's specific tokens.
  */
 function detectTranslationFailure(input: string, output: string): string | null {
-  if (looksUntranslated(output)) return "CJK echo";
+  if (isKoreanEcho(input, output)) return "CJK echo";
   if (KNOWN_EXAMPLE_OUTPUTS.has(output.trim())) return "example echo";
   if (isLengthDisproportionate(input, output)) return "length disproportionate";
   if (isMissingInputContent(input, output)) return "missing input content";
@@ -313,15 +313,35 @@ function isMissingInputContent(input: string, output: string): boolean {
 }
 
 /**
- * Heuristic: a translation that's >30% CJK chars almost certainly didn't
- * actually translate. Placeholders restored to @paths and URLs are ASCII,
- * so a real English translation should land near 0% CJK.
+ * Did the model echo Korean instead of translating it? A real ko→en
+ * translation lands near 0% Korean.
+ *
+ * The naive "CJK chars / all non-whitespace chars > 30%" ratio has a blind
+ * spot: when the output is an all-Korean sentence carrying English
+ * IDENTIFIERS (e.g. "이 product.upload.single, product.upload.bulk 2개를
+ * 만들면 어떤 문제가 발생할까요?"), the identifiers dilute the ratio below 30%
+ * and the echo slips through — observed in the wild when the context-hint
+ * feature led gemma3:4b to regurgitate the reference text as Korean.
+ *
+ * Fix: ignore the identifiers that were meant to be preserved verbatim.
+ * Tokens (len ≥ 2) appearing in BOTH input and output are pass-through
+ * identifiers, not translated content — strip them (and {K\d+} placeholders)
+ * before measuring. What remains is the model's own prose: if THAT is mostly
+ * Korean, it never translated. Genuinely-translated English the model
+ * produced (words NOT in the input) stays in the denominator, so a mostly
+ * English answer that legitimately keeps one Korean proper noun isn't flagged.
  */
-function looksUntranslated(text: string): boolean {
-  const cjk = text.match(new RegExp(CJK_RE.source, "g"))?.length ?? 0;
-  const nonWs = text.replace(/\s/g, "").length;
-  if (nonWs === 0) return false;
-  return cjk / nonWs > 0.3;
+function isKoreanEcho(input: string, output: string): boolean {
+  const inputTokens = new Set(
+    [...input.matchAll(/[A-Za-z0-9]{2,}/g)].map((m) => m[0].toLowerCase()),
+  );
+  const stripped = output
+    .replace(/\{K\d+\}/g, " ")
+    .replace(/[A-Za-z0-9]{2,}/g, (t) => (inputTokens.has(t.toLowerCase()) ? " " : t));
+  const cjk = stripped.match(new RegExp(CJK_RE.source, "gu"))?.length ?? 0;
+  const letters = (stripped.match(/[\p{L}\p{N}]/gu) ?? []).length;
+  if (letters === 0) return false;
+  return cjk / letters > 0.3;
 }
 
 function repairMissingPlaceholders(

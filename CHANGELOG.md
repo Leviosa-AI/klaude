@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-06-15
+
+### Fixed
+
+- The conversation-context hint (added in 0.1.4) could backfire on small local
+  models: given a short input carrying mostly English identifiers (e.g.
+  `아니 product.upload.single, product.upload.bulk 2개` — 3 Korean chars),
+  gemma3:4b regurgitated the reference context as a fabricated Korean question
+  instead of translating, and the result was submitted to Claude verbatim. Two
+  independent guards now prevent this:
+  - **Context is skipped when the input has too little Korean to translate**
+    (fewer than `KLAUDE_CONTEXT_MIN_KO_CHARS`, default 8). A thin Korean signal
+    can't anchor the model against a long reference block, so the hint is
+    dropped — the few Korean words translate fine without it.
+  - **The Korean-echo detector no longer misses identifier-diluted echoes.**
+    It previously flagged output only above a 30% raw CJK-character ratio;
+    embedded English identifiers (`product.upload.single`, …) dragged the ratio
+    under the threshold so an all-Korean hallucination passed. It now strips the
+    pass-through identifiers (tokens present in both input and output) before
+    measuring, so the model's own prose is what's judged. A caught echo retries
+    once **without** context, then falls back to the original input.
+
 ## [0.1.4] - 2026-06-15
 
 ### Fixed

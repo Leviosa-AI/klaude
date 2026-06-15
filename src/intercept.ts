@@ -1,7 +1,7 @@
 import type { Logger } from "./log.js";
 import type { ScreenMirror } from "./mirror.js";
 import type { PtyHandle } from "./pty.js";
-import { needsTranslation } from "./tokenize.js";
+import { cjkCharCount, needsTranslation } from "./tokenize.js";
 import type { Translator } from "./translate.js";
 import { translatePrompt } from "./translate.js";
 
@@ -92,6 +92,26 @@ export interface InterceptDeps {
 
 /** Opt out of passing Claude's recent output as a translation hint. */
 const CONTEXT_DISABLED = process.env.KLAUDE_NO_CONTEXT === "1";
+
+/**
+ * Minimum Korean characters in the input before the recent-output context
+ * hint is attached. The hint helps terminology consistency, but on inputs
+ * with only a few Korean chars the translation signal is thin and a small
+ * local model (gemma3:4b) will REGURGITATE the reference context instead of
+ * translating — e.g. "아니 product.upload.single, product.upload.bulk 2개"
+ * (3 Korean chars riding English identifiers) came back as a fabricated
+ * Korean question lifted from the context. Below this floor we skip the hint
+ * entirely; the few Korean words translate fine without it. Tunable via env.
+ */
+const CONTEXT_MIN_KO_CHARS = Number(process.env.KLAUDE_CONTEXT_MIN_KO_CHARS ?? 8);
+
+/**
+ * Is there enough Korean in this input to safely attach the context hint?
+ * See CONTEXT_MIN_KO_CHARS for why thin-Korean inputs are excluded.
+ */
+export function contextHintEligible(input: string): boolean {
+  return cjkCharCount(input) >= CONTEXT_MIN_KO_CHARS;
+}
 
 export class Interceptor {
   private deps: InterceptDeps;
@@ -300,9 +320,11 @@ export class Interceptor {
 
     // Grab Claude's recent output as a terminology hint BEFORE we mutate
     // the input box (indicator/clear). Skipped on the first translated
-    // prompt (no prior Claude turn) and when disabled via env.
+    // prompt (no prior Claude turn), when disabled via env, and when the
+    // input has too little Korean to anchor the translation (context would
+    // otherwise hijack a small model — see contextHintEligible).
     const context =
-      CONTEXT_DISABLED || this.translatedCount === 0
+      CONTEXT_DISABLED || this.translatedCount === 0 || !contextHintEligible(input)
         ? undefined
         : (this.deps.mirror.recentContext() ?? undefined);
     this.translatedCount++;

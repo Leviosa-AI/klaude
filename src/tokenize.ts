@@ -174,3 +174,13 @@ export function restore(translated: string, tokens: string[]): string {
 export function needsTranslation(input: string): boolean {
   return CJK_RE.test(input);
 }
+
+/**
+ * Count of CJK (Korean/Japanese/Chinese) characters in the text, per CJK_RE.
+ * Used to gauge how much there actually is to translate — e.g. to decide
+ * whether an input carries enough Korean signal to safely attach a
+ * reference-context hint, or whether a translation output is a Korean echo.
+ */
+export function cjkCharCount(input: string): number {
+  return input.match(new RegExp(CJK_RE.source, "gu"))?.length ?? 0;
+}
