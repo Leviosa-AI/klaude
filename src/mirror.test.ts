@@ -130,9 +130,49 @@ describe("ScreenMirror.hasSubmitFormWidget", () => {
     m.dispose();
   });
 
+  it("detects the heavy ✔ check-mark variant", async () => {
+    const m = new ScreenMirror(80, 24);
+    await paint(m, ["← □ Callback  ✔ Submit  →", "❯ 1. 폐기"]);
+    expect(m.hasSubmitFormWidget()).toBe(true);
+    m.dispose();
+  });
+
+  it("detects the widget by its escape-hatch options when the ✓ Submit header has scrolled off the top", async () => {
+    // Tall widget (long Korean option descriptions) on a short viewport:
+    // Claude Code renders only the bottom portion, so the `✓ Submit` header
+    // tab is pushed above row 0 and never reaches the mirror. The
+    // bottom-anchored `Type something.` / `Chat about this` options remain.
+    const m = new ScreenMirror(80, 8);
+    await paint(m, [
+      "❯ 1. 폐기 (권장)",
+      "    머지 안 함. 워크트리 제거 + 로컬/원격 브랜치 삭제.",
+      "    main이 이미 상위 버전을 가지고 있어 회귀함.",
+      "  2. 일단 보존",
+      "    삭제하지 않고 그대로 둠. 나중에 직접 판단.",
+      "  3. Type something.",
+      "─────────────────────────────",
+      "  4. Chat about this",
+    ]);
+    // Header is gone from the viewport...
+    expect(m.snapshotRows().some((r) => /Submit/.test(r))).toBe(false);
+    // ...but the widget is still detected.
+    expect(m.hasSubmitFormWidget()).toBe(true);
+    m.dispose();
+  });
+
   it("returns false when no ✓ Submit anywhere", async () => {
     const m = new ScreenMirror(80, 24);
     await paint(m, ["❯ normal input", "─────────────"]);
+    expect(m.hasSubmitFormWidget()).toBe(false);
+    m.dispose();
+  });
+
+  it("does not false-positive on a user prompt mentioning the phrase mid-sentence", async () => {
+    const m = new ScreenMirror(80, 24);
+    await paint(m, [
+      "❯ 3. Type something useful here and chat about this later",
+      "─────────────",
+    ]);
     expect(m.hasSubmitFormWidget()).toBe(false);
     m.dispose();
   });

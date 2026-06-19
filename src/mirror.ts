@@ -168,20 +168,39 @@ export class ScreenMirror {
   /**
    * Detect Claude Code's interactive checklist/form widget. These appear
    * when claude asks the user a structured multi-choice question and
-   * render a top header containing a `✓ Submit` button along with
-   * checkbox-style options (`[ ]` / `[x]`). The widget is NOT a normal
-   * input box — Enter navigates/toggles within it rather than submitting
-   * a text line, and our clear+retype+CR sequence would corrupt it.
+   * render a top header tab bar containing a `✓ Submit` button along with
+   * per-question tabs (`□ Callback  □ Polotno  ✓ Submit  →`). The widget
+   * is NOT a normal input box — Enter navigates/toggles within it rather
+   * than submitting a text line, and our clear+retype+CR sequence would
+   * corrupt it (and waste a translation call on the menu options).
    *
-   * Signal: any visible row contains `✓ Submit` (the literal U+2713 check
-   * mark followed by the word Submit). Matches even when the widget is
-   * higher up in the viewport — once we see this signature anywhere on
-   * screen we treat the whole turn as "owned by the widget".
+   * Two independent signals, ANY of which marks the turn "owned by the
+   * widget":
+   *
+   *   1. HEADER — a row matching `✓ Submit` (the Submit tab). Reliable
+   *      ONLY while the header is on screen.
+   *
+   *   2. ESCAPE-HATCH OPTIONS — a numbered option row whose label is
+   *      exactly Claude Code's auto-appended `Type something.` or
+   *      `Chat about this`. These sit at the BOTTOM of the widget, so
+   *      they stay in the viewport even when the widget is taller than
+   *      the terminal.
+   *
+   * Why #2 is needed: when a question's options have long (multi-line)
+   * descriptions — common with Korean text — the widget grows taller than
+   * the terminal and Claude Code renders only its bottom portion, pushing
+   * the `✓ Submit` header ABOVE the top of the viewport. Header-only
+   * detection then misses the widget, the Enter falls through to the slow
+   * path, and klaude wastes ~2-4s translating the menu options (the "렉"
+   * the user hit on every selection). The bottom-anchored option labels
+   * survive that scroll-off. Both labels are English UI chrome, so even a
+   * stray false match is a harmless pass-through (nothing to translate).
    */
   hasSubmitFormWidget(): boolean {
     const rows = this.snapshotRows();
     for (const row of rows) {
-      if (/✓\s*Submit\b/i.test(row)) return true;
+      if (SUBMIT_TAB.test(row)) return true;
+      if (FORM_ESCAPE_OPTION.test(row)) return true;
     }
     return false;
   }
@@ -328,6 +347,26 @@ const PROMPT_LINE = /^\s*(?:[│|]\s*)?❯\s/;
  * false positive would corrupt a legitimate translation).
  */
 const BASH_PROMPT_LINE = /^(?:[│|]\s)?!\s/;
+
+/**
+ * The `✓ Submit` tab/button in Claude Code's interactive question widget.
+ * Tolerates both the light (U+2713 ✓) and heavy (U+2714 ✔) check marks the
+ * TUI may render. This is the widget's top-of-header signal — see
+ * hasSubmitFormWidget for why a second, bottom-anchored signal is also needed.
+ */
+const SUBMIT_TAB = /[✓✔]\s*Submit\b/i;
+
+/**
+ * A numbered escape-hatch option that Claude Code auto-appends to the bottom
+ * of every interactive question widget: `Type something.` (free-text) and
+ * `Chat about this`. Anchored as a standalone option row (optional box edge,
+ * optional `❯` selection cursor, `N.`, the exact label, nothing after) so a
+ * user prompt that merely mentions the phrase mid-sentence won't match. These
+ * rows stay in the viewport even when the widget's `✓ Submit` header scrolls
+ * off the top, which is the case header-only detection used to miss.
+ */
+const FORM_ESCAPE_OPTION =
+  /^\s*(?:[│|]\s*)?(?:❯\s*)?\d+\.\s+(?:Type something\.?|Chat about this)\s*$/i;
 
 /**
  * Strip the `❯` prompt marker (and the whitespace after it) from a prompt

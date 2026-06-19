@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-06-19
+
+### Fixed
+
+- **Pressing Enter on an interactive question widget no longer lags.**
+  `hasSubmitFormWidget()` detected Claude Code's multi-choice question widget
+  solely by the `✓ Submit` tab in its top header. When a question's options had
+  long, multi-line descriptions — common with Korean text — the widget grew
+  taller than the terminal, so Claude Code rendered only its bottom portion and
+  pushed the `✓ Submit` header above the top of the viewport. Detection then
+  missed the widget, the Enter fell through to the slow path, and klaude wasted
+  ~2-4s translating the menu options on every selection (the visible "렉").
+  Detection now also recognizes the widget by the escape-hatch option rows
+  (`Type something.` / `Chat about this`) that Claude Code auto-appends at the
+  bottom of the widget — these stay in the viewport even when the header
+  scrolls off. The `✓` header match was also broadened to accept the heavy
+  `✔` check-mark variant.
+
 ## [0.2.1] - 2026-06-19
 
 ### Fixed
