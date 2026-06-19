@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-19
+
+### Added
+
+- **The local Ollama daemon now starts automatically.** When the backend is
+  `ollama` and the server isn't already running, klaude spawns a detached
+  `ollama serve` on session start and waits for it to come up. Previously, if
+  the daemon was down every translation threw `TypeError: fetch failed` and the
+  original Korean was submitted untranslated — translation silently stopped
+  working. The auto-start is best-effort and never blocks `claude` from
+  launching; it's a shared daemon, so it reuses the same `localhost:11434` as
+  your other apps. A remote `OLLAMA_HOST` is never auto-started (klaude only
+  warns), since `ollama serve` always binds locally.
+- **`klaude model` subcommands for managing local models:**
+  - `klaude model list` — list installed Ollama models with size, an
+    `(embedding)` tag, and a `◄ current` marker for the configured one.
+  - `klaude model use <name>` — switch the backend to a local model, validating
+    it's installed first (otherwise it points you at `ollama pull`).
+  - `klaude model bench [names...]` — compare models on ko→en translation,
+    printing each model's output and average latency. Defaults to all installed
+    chat-capable models; pass names to limit the set.
+
+### Fixed
+
+- **Translation failures no longer eat the last syllable of your input.** The
+  "🔄 번역중..." indicator is appended after the Korean input and removed on the
+  failure path before submitting the original. The removal reused the same
+  delete helper as the full-box wipe, which over-deletes by a safety margin
+  (+4 chars) — fine when clearing everything before a retype, but it chewed off
+  the tail of the user's real input when only the indicator was meant to go.
+  This bit on *every* failure, e.g. whenever the Ollama daemon was down. The
+  indicator is now removed with an exact count, leaving the input intact.
+
 ## [0.1.5] - 2026-06-15
 
 ### Fixed
