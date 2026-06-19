@@ -344,7 +344,12 @@ export class Interceptor {
       if (!indicatorShown) return;
       indicatorShown = false;
       this.deps.pty.write(CTRL_E);
-      clearInput(this.deps.pty, indicator);
+      // Delete EXACTLY the indicator — no safety margin. The user's original
+      // Korean sits to the left of the indicator and must survive untouched
+      // so we can submit it (the error fallback path). An over-delete here
+      // eats the last syllable(s) of the real input — observed as "마지막
+      // 음절이 짤린다" whenever translation failed (e.g. Ollama daemon down).
+      clearInput(this.deps.pty, indicator, 0);
     };
 
     try {
@@ -415,9 +420,13 @@ export function findBareCR(chunk: string): number {
  * so DEL × total-char-count handles it. Array.from() counts code points
  * correctly (Korean chars are still 1 each).
  */
-function clearInput(pty: PtyHandle, input: string): void {
+function clearInput(
+  pty: PtyHandle,
+  input: string,
+  margin: number = DEL_SAFETY_MARGIN,
+): void {
   const chars = Array.from(input);
-  pty.write(DEL.repeat(chars.length + DEL_SAFETY_MARGIN));
+  pty.write(DEL.repeat(chars.length + margin));
 }
 
 /**
