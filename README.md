@@ -127,8 +127,8 @@ klaude --resume         # 이전 세션 재개 (claude 플래그는 그대로 �
 klaude --help
 ```
 
-klaude가 자기 서브커맨드(`config`, `glossary`, `install-rules`, `uninstall-rules`, `--version`,
-`--help`)로 인식하지 않는 플래그는 모두 `claude`로 그대로 전달됩니다 — 따라서 `--resume` /
+klaude가 자기 서브커맨드(`config`, `model`, `glossary`, `install-rules`, `uninstall-rules`,
+`--version`, `--help`)로 인식하지 않는 플래그는 모두 `claude`로 그대로 전달됩니다 — 따라서 `--resume` /
 `--continue`, `-p "<프롬프트>"`, 모델 선택 플래그 등이 번역 레이어와 함께 정상 동작합니다.
 
 > **첫 실행:** 처음 실행하면 토큰 절약 규칙 4개를 글로벌 `~/.claude/CLAUDE.md`에 추가할지
@@ -265,13 +265,22 @@ Enter를 누르기 전에 시크릿/PII/기밀 코드가 프롬프트에 들어 
 | Backend | Cost | Latency | Setup |
 |---|---|---|---|
 | **Haiku** (default) | ~$0.25 / $1.25 per MTok | API round-trip (~수백 ms) | `ANTHROPIC_API_KEY` 필요 |
-| **Ollama** (local) | Free, offline | 로컬 GPU/CPU 의존 | `ollama serve` + `ollama pull gemma3:4b` |
+| **Ollama** (local) | Free, offline | 로컬 GPU/CPU 의존 | `ollama pull qwen2.5:7b` (서버는 자동 기동) |
 
 ```bash
 klaude config set backend haiku                  # 기본
 klaude config set backend ollama:gemma3:4b       # 로컬
 klaude config set backend ollama:qwen2.5:7b      # 다른 모델
+
+# 또는 model 서브커맨드로 (설치 여부 검증 + 목록/비교 포함)
+klaude model list
+klaude model use qwen2.5:7b
+klaude model bench
 ```
+
+Ollama 백엔드에서는 klaude 실행 시 로컬 데몬이 떠 있지 않으면 **`ollama serve`를 자동으로
+기동**합니다(공유 데몬이라 다른 앱과 같은 `localhost:11434`를 함께 씁니다). 원격 `OLLAMA_HOST`를
+가리키는 경우에는 자동 기동하지 않고 경고만 남깁니다.
 
 환경 변수로 한 번만 오버라이드할 수도 있습니다:
 
@@ -375,6 +384,12 @@ klaude config set backend ollama:gemma3:4b
 klaude config set sourceLang ko
 klaude config set debug true        # → ~/.klaude/debug.log
 
+# 로컬 모델 (Ollama)
+klaude model list                   # 설치된 로컬 모델 목록 (크기 · 현재 모델 표시)
+klaude model use qwen2.5:7b         # 로컬 모델 변경 (미설치면 pull 안내)
+klaude model bench                  # 설치된 모델들 ko→en 번역 비교
+klaude model bench gemma3:4b qwen2.5:7b   # 특정 모델만 비교
+
 # 사용자 사전
 klaude glossary list
 klaude glossary add 베가베리 Vegavery
@@ -395,6 +410,8 @@ klaude uninstall-rules
 | `src/intercept.ts` | Enter 감지, 입력 추출, clear+replay 흐름 |
 | `src/tokenize.ts` | `@path`, `/cmd`, code, URL placeholder 보호/복원 |
 | `src/translate.ts` | Haiku / Ollama 번역 백엔드 |
+| `src/ollama.ts` | 로컬 Ollama 데몬 자동 기동 (`ensureOllamaReady`) |
+| `src/models.ts` | `model list` / `use` / `bench` 서브커맨드 |
 | `src/config.ts` | `~/.klaude/config.json` 로드/저장 |
 | `src/firstRun.ts` | 첫 실행 프롬프트, 토큰 절약 규칙 install/uninstall |
 | `src/log.ts` | 디버그 로거 (`~/.klaude/debug.log`) |

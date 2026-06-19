@@ -7,6 +7,8 @@ import { installRules, maybePromptForRulesInstall, uninstallRules } from "./firs
 import { Interceptor } from "./intercept.js";
 import { makeLogger } from "./log.js";
 import { ScreenMirror } from "./mirror.js";
+import { cmdModelBench, cmdModelList, cmdModelUse } from "./models.js";
+import { ensureOllamaReady } from "./ollama.js";
 import { spawnClaude } from "./pty.js";
 import { makeTranslator } from "./translate.js";
 
@@ -27,6 +29,7 @@ async function main() {
 
   // Subcommands: config, glossary, install-rules, uninstall-rules, version, --help
   if (args[0] === "config") return handleConfigCmd(args.slice(1));
+  if (args[0] === "model") return handleModelCmd(args.slice(1));
   if (args[0] === "glossary") return handleGlossaryCmd(args.slice(1));
   if (args[0] === "install-rules") {
     const result = installRules();
@@ -64,6 +67,14 @@ async function runClaude(claudeArgs: string[]) {
   const translator = makeTranslator(cfg);
   const logger = makeLogger(cfg.debug || process.env.KLAUDE_DUMP_KEYS === "1");
   logger.log("session start", { backend: cfg.backend.kind });
+
+  // Ollama backend needs a running daemon — auto-start it so translation
+  // doesn't silently degrade to pass-through when the server is down. Best
+  // effort: never blocks claude from launching (ensureOllamaReady never
+  // throws). The first translation eats the cold-start latency anyway.
+  if (cfg.backend.kind === "ollama") {
+    await ensureOllamaReady(cfg.backend.host, logger);
+  }
 
   const cols = process.stdout.columns || 120;
   const rows = process.stdout.rows || 30;
@@ -147,6 +158,17 @@ function handleConfigCmd(args: string[]) {
   printHelp();
 }
 
+async function handleModelCmd(args: string[]) {
+  const sub = args[0];
+  if (sub === "list" || sub === "ls" || sub === undefined) return cmdModelList();
+  if (sub === "use") return cmdModelUse(args[1]);
+  if (sub === "bench" || sub === "compare") return cmdModelBench(args.slice(1));
+  console.log(`Usage:
+  klaude model list                 List installed local (Ollama) models
+  klaude model use <name>           Switch klaude to a local model
+  klaude model bench [names...]     Compare models on ko→en translation`);
+}
+
 function handleGlossaryCmd(args: string[]) {
   const cfg = loadConfig();
   cfg.glossary ??= [];
@@ -192,6 +214,9 @@ Usage:
   klaude config set backend ollama:gemma3:4b   Use local Ollama
   klaude config set sourceLang ko    Source language (default: ko)
   klaude config set debug true       Verbose logs to ~/.klaude/debug.log
+  klaude model list                  List installed local (Ollama) models
+  klaude model use <name>            Switch klaude to a local model
+  klaude model bench [names...]      Compare models on ko→en translation
   klaude glossary list                       Show user glossary
   klaude glossary add 베가베리 Vegavery     Add Korean → English mapping
   klaude glossary remove 베가베리           Remove an entry

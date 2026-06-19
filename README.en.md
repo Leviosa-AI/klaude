@@ -134,8 +134,8 @@ klaude --help
 Any flag klaude doesn't own is forwarded verbatim to `claude` — so session
 flags like `--resume` / `--continue`, `-p "<prompt>"`, and model selectors all
 work with the translation layer active. klaude only intercepts its own
-subcommands (`config`, `glossary`, `install-rules`, `uninstall-rules`,
-`--version`, `--help`).
+subcommands (`config`, `model`, `glossary`, `install-rules`,
+`uninstall-rules`, `--version`, `--help`).
 
 > **First run:** klaude will offer to add four token-discipline rules to your
 > global `~/.claude/CLAUDE.md`. The prompt defaults to **No** and klaude works
@@ -285,13 +285,23 @@ fully local operation, use the Ollama backend.
 | Backend | Cost | Latency | Setup |
 |---|---|---|---|
 | **Haiku** (default) | ~$0.25 / $1.25 per MTok | API round-trip (~hundreds of ms) | requires `ANTHROPIC_API_KEY` |
-| **Ollama** (local) | Free, offline | depends on local GPU/CPU | `ollama serve` + `ollama pull gemma3:4b` |
+| **Ollama** (local) | Free, offline | depends on local GPU/CPU | `ollama pull qwen2.5:7b` (server auto-starts) |
 
 ```bash
 klaude config set backend haiku                  # default
 klaude config set backend ollama:gemma3:4b       # local
 klaude config set backend ollama:qwen2.5:7b      # any other model
+
+# Or via the model subcommand (validates install + list/compare)
+klaude model list
+klaude model use qwen2.5:7b
+klaude model bench
 ```
+
+With the Ollama backend, klaude **auto-starts `ollama serve`** if the local
+daemon isn't already running (it's a shared daemon, so it uses the same
+`localhost:11434` as your other apps). For a remote `OLLAMA_HOST` it doesn't
+auto-start — it just warns.
 
 Or override per invocation via env:
 
@@ -401,6 +411,12 @@ klaude config set backend ollama:gemma3:4b
 klaude config set sourceLang ko
 klaude config set debug true        # → ~/.klaude/debug.log
 
+# Local models (Ollama)
+klaude model list                   # list installed local models (size · current)
+klaude model use qwen2.5:7b         # switch local model (prompts to pull if missing)
+klaude model bench                  # compare installed models on ko→en translation
+klaude model bench gemma3:4b qwen2.5:7b   # compare specific models only
+
 # User glossary
 klaude glossary list
 klaude glossary add 베가베리 Vegavery
@@ -421,6 +437,8 @@ klaude uninstall-rules
 | `src/intercept.ts` | Enter detection, input extraction, clear+replay flow |
 | `src/tokenize.ts` | Protect/restore placeholders for `@path`, `/cmd`, code, URLs |
 | `src/translate.ts` | Translation backends: Haiku, Ollama |
+| `src/ollama.ts` | Auto-start the local Ollama daemon (`ensureOllamaReady`) |
+| `src/models.ts` | `model list` / `use` / `bench` subcommands |
 | `src/config.ts` | Load/save `~/.klaude/config.json` |
 | `src/firstRun.ts` | First-run prompt + install/uninstall of token-discipline rules |
 | `src/log.ts` | Debug logger (`~/.klaude/debug.log`) |
