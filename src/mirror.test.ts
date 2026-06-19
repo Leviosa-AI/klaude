@@ -72,6 +72,18 @@ describe("ScreenMirror.extractInputBox", () => {
     expect(m.extractInputBox()).toBe("current input");
     m.dispose();
   });
+
+  it("strips the ❯ marker even when a non-ASCII space follows it", async () => {
+    // Claude Code sometimes renders a non-breaking / narrow-no-break space
+    // after ❯; the marker must still be removed (it used to leak into the
+    // translated text, e.g. `❯ dev로 머지만 고고` → `❯ dev log only`).
+    for (const space of [" ", " "]) {
+      const m = new ScreenMirror(80, 24);
+      await paint(m, [`❯${space}dev로 머지만 고고`, "─────────"]);
+      expect(m.extractInputBox()).toBe("dev로 머지만 고고");
+      m.dispose();
+    }
+  });
 });
 
 describe("ScreenMirror.hasAutocompletePopup", () => {

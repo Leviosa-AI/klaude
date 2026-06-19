@@ -330,14 +330,23 @@ const PROMPT_LINE = /^\s*(?:[│|]\s*)?❯\s/;
 const BASH_PROMPT_LINE = /^(?:[│|]\s)?!\s/;
 
 /**
- * Strip "❯ " from a prompt row. Uses a single replace with `❯ ` as the
- * literal anchor — avoids a greedy `^.*?❯ ` that could match a `❯` the
- * user typed mid-input (rare but possible).
+ * Strip the `❯` prompt marker (and the whitespace after it) from a prompt
+ * row. Anchored on the first `❯` to avoid matching a `❯` the user typed
+ * mid-input (rare but possible).
+ *
+ * The space after `❯` is NOT always an ASCII space: Claude Code sometimes
+ * renders a non-breaking / narrow-no-break space (U+00A0 / U+202F). The old
+ * `indexOf("❯ ")` matched an ASCII space only, so on those rows the marker
+ * AND its odd space leaked into the extracted input — they were then fed to
+ * the translator and surfaced verbatim in the text submitted to Claude
+ * (e.g. `❯ dev로 머지만 고고` → `❯ dev log only`). Match any trailing
+ * whitespace (JS `\s` covers the unicode spaces) so the marker is always
+ * removed.
  */
 function stripPromptMarker(row: string): string {
-  const idx = row.indexOf("❯ ");
+  const idx = row.indexOf("❯");
   if (idx === -1) return row;
-  return row.slice(idx + 2);
+  return row.slice(idx + 1).replace(/^\s+/u, "");
 }
 
 function isDividerLine(row: string): boolean {
