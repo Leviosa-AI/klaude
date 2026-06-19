@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-19
+
+### Fixed
+
+- **The `❯` prompt marker no longer leaks into the translation.**
+  `extractInputBox()` stripped the marker by matching the literal `"❯ "` with
+  an ASCII space, but Claude Code sometimes renders a non-breaking /
+  narrow-no-break space (U+00A0 / U+202F) after it. On those rows the marker
+  and its odd space survived into the extracted input, were fed to the
+  translator, and surfaced verbatim in the text submitted to Claude — e.g.
+  `❯ dev로 머지만 고고` → `❯ dev log only`. The stray marker also corrupted
+  meaning, inverting the negation on inputs like `…영문이 아니라 한글로 나오지?`.
+  The marker and any following whitespace (unicode-aware) are now always
+  removed.
+
 ## [0.2.0] - 2026-06-19
 
 ### Added
