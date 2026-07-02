@@ -466,6 +466,8 @@ klaude uninstall-rules
 | `KLAUDE_RENDER_DELAY` | Milliseconds to wait after Enter before reading the screen. Default `80` |
 | `KLAUDE_DUMP_KEYS` | `=1` logs raw keyboard byte codes to the debug log (also enables logging on its own). Diagnoses key-chord encodings — e.g. Ctrl+Enter |
 | `KLAUDE_DUMP_POPUP` | `=1` dumps the screen on every Enter. Diagnoses the autocomplete-popup detector |
+| `KLAUDE_NO_CONTEXT` | `=1` disables passing Claude's recent output to the translator as a terminology hint |
+| `KLAUDE_CONTEXT_CHARS` | Max recent-conversation characters used as the terminology hint. Default `1200` |
 
 ## Development
 

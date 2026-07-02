@@ -36,6 +36,20 @@ describe("findBareCR", () => {
   it("handles consecutive CRs", () => {
     expect(findBareCR("\r\r")).toBe(0);
   });
+
+  it("skips a head CR when the previous chunk ended with ESC (split Shift+Enter)", () => {
+    expect(findBareCR("\r", true)).toBe(-1);
+    expect(findBareCR("\rabc", true)).toBe(-1);
+  });
+
+  it("split flag only shields the HEAD CR — later CRs still submit", () => {
+    expect(findBareCR("\rabc\r", true)).toBe(4);
+  });
+
+  it("split flag is irrelevant when the CR is not at the head", () => {
+    expect(findBareCR("a\r", true)).toBe(1);
+    expect(findBareCR("\r", false)).toBe(0);
+  });
 });
 
 describe("isEscCancel", () => {

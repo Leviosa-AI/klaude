@@ -75,7 +75,7 @@ export interface Translator {
  * doesn't translate or repeat it. Trimmed to the tail (most recent) and
  * capped so it never dominates a small local model's context window.
  */
-const MAX_CONTEXT_CHARS = Number(process.env.KLAUDE_CONTEXT_CHARS ?? 1200);
+export const MAX_CONTEXT_CHARS = Number(process.env.KLAUDE_CONTEXT_CHARS ?? 1200);
 
 function contextSection(context?: string): string {
   if (!context) return "";
@@ -184,8 +184,16 @@ class OllamaTranslator implements Translator {
         signal: ctrl.signal,
       });
       if (!res.ok) throw new Error(`ollama ${res.status}: ${await res.text()}`);
-      const json = (await res.json()) as { message: { content: string } };
-      return json.message.content.trim();
+      const json: unknown = await res.json();
+      const content = (json as { message?: { content?: unknown } })?.message?.content;
+      if (typeof content !== "string") {
+        // Don't trust the shape blindly — an unexpected body (proxy error
+        // page, API change) used to surface as an opaque TypeError here.
+        throw new Error(
+          `ollama: unexpected /api/chat response shape: ${JSON.stringify(json)?.slice(0, 200)}`,
+        );
+      }
+      return content.trim();
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener("abort", onCancel);

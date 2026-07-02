@@ -438,6 +438,8 @@ klaude uninstall-rules
 | `KLAUDE_RENDER_DELAY` | Enter 후 화면을 읽기까지 대기 시간(ms). 기본 `80` |
 | `KLAUDE_DUMP_KEYS` | `=1`이면 키 입력 바이트를 디버그 로그에 기록합니다(로깅도 자동 활성화). 키 조합 인코딩 진단용 — 예: Ctrl+Enter |
 | `KLAUDE_DUMP_POPUP` | `=1`이면 Enter 시점마다 화면 덤프를 기록합니다. 자동완성 popup 감지 진단용 |
+| `KLAUDE_NO_CONTEXT` | `=1`이면 번역 시 Claude 최근 출력을 용어 힌트로 넘기지 않습니다 |
+| `KLAUDE_CONTEXT_CHARS` | 용어 힌트로 넘길 최근 대화 최대 글자 수. 기본 `1200` |
 
 ## Development
 

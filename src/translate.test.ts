@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Translator } from "./translate.js";
-import { translatePrompt } from "./translate.js";
+import { makeTranslator, translatePrompt } from "./translate.js";
 
 /**
  * Build a mock Translator with a script: the n-th call returns the n-th item.
@@ -24,6 +24,53 @@ function scriptedTranslator(
     },
   };
 }
+
+describe("OllamaTranslator — response shape validation", () => {
+  const ollamaCfg = {
+    backend: {
+      kind: "ollama" as const,
+      model: "gemma3:4b",
+      host: "http://localhost:11434",
+    },
+    sourceLang: "ko",
+    targetLang: "en",
+    debug: false,
+    glossary: [],
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubFetchJson(body: unknown) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify(body), { status: 200 })),
+    );
+  }
+
+  it("returns the trimmed content on the expected shape", async () => {
+    stubFetchJson({ message: { content: "  Hello  " } });
+    const t = makeTranslator(ollamaCfg);
+    await expect(t.translate("안녕")).resolves.toBe("Hello");
+  });
+
+  it("throws a descriptive error when message.content is missing", async () => {
+    stubFetchJson({ error: "model not found" });
+    const t = makeTranslator(ollamaCfg);
+    await expect(t.translate("안녕")).rejects.toThrow(
+      /unexpected \/api\/chat response shape/,
+    );
+  });
+
+  it("throws a descriptive error when content is not a string", async () => {
+    stubFetchJson({ message: { content: 42 } });
+    const t = makeTranslator(ollamaCfg);
+    await expect(t.translate("안녕")).rejects.toThrow(
+      /unexpected \/api\/chat response shape/,
+    );
+  });
+});
 
 describe("translatePrompt — cancel signal", () => {
   it("threads the AbortSignal through to the translator", async () => {

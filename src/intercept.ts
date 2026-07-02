@@ -3,7 +3,7 @@ import type { ScreenMirror } from "./mirror.js";
 import type { PtyHandle } from "./pty.js";
 import { cjkCharCount, needsTranslation } from "./tokenize.js";
 import type { Translator } from "./translate.js";
-import { translatePrompt } from "./translate.js";
+import { MAX_CONTEXT_CHARS, translatePrompt } from "./translate.js";
 
 /**
  * Enter-time interception flow.
@@ -74,6 +74,16 @@ const DUMP_KEYS = process.env.KLAUDE_DUMP_KEYS === "1";
 const RENDER_DELAY_MS = Number(process.env.KLAUDE_RENDER_DELAY) || 80;
 
 /**
+ * How long an ESC at the tail of one chunk stays "armed" as the possible
+ * first half of a split Shift+Enter (ESC in one stdin chunk, CR at the head
+ * of the next — happens on SSH / high-latency links). Split halves arrive
+ * back-to-back (sub-10ms); a deliberate ESC-then-Enter as two keypresses is
+ * far slower, so a short window disambiguates the two without misreading a
+ * real submit after a standalone ESC.
+ */
+const SPLIT_ESC_WINDOW_MS = 100;
+
+/**
  * Extra DEL keystrokes beyond the measured char count, in case claude's
  * editor counts graphemes differently than Array.from(input).length. A
  * harmless over-delete: if too many DELs hit an empty editor, claude
@@ -137,9 +147,34 @@ export class Interceptor {
   }
 
   /**
+   * Did the LAST bytes forwarded to claude end with a lone ESC, and when?
+   * Tracked on the wrapper's return value (what index.ts actually forwards)
+   * so a swallowed ESC — e.g. the translation-cancel key — never arms the
+   * flag. Used to recognize a Shift+Enter split across two stdin chunks.
+   */
+  private forwardedTailEsc = false;
+  private forwardedTailEscAt = 0;
+
+  /**
    * Process a chunk of bytes from the user's keyboard. Returns the chunk
    * to forward to claude (may be empty if we're intercepting).
    *
+   * This wrapper adds cross-chunk Shift+Enter context around the real
+   * handler: a CR at the head of this chunk is NOT a submit if the
+   * previously FORWARDED chunk ended with ESC moments ago (split
+   * Shift+Enter — see SPLIT_ESC_WINDOW_MS).
+   */
+  async handleKeyInput(chunk: string): Promise<string> {
+    const prevEndedWithEsc =
+      this.forwardedTailEsc &&
+      Date.now() - this.forwardedTailEscAt <= SPLIT_ESC_WINDOW_MS;
+    const out = await this.processKeyInput(chunk, prevEndedWithEsc);
+    this.forwardedTailEsc = out.endsWith(ESC);
+    if (this.forwardedTailEsc) this.forwardedTailEscAt = Date.now();
+    return out;
+  }
+
+  /**
    * Concurrency model:
    *   - this.busy is claimed SYNCHRONOUSLY when a CR is detected, before
    *     any await. Subsequent handleKeyInput invocations that see busy=true
@@ -154,7 +189,10 @@ export class Interceptor {
    *   - EXCEPTION: a bare ESC while busy is the cancel signal — it aborts
    *     the in-flight translation instead of being dropped (see isEscCancel).
    */
-  async handleKeyInput(chunk: string): Promise<string> {
+  private async processKeyInput(
+    chunk: string,
+    prevEndedWithEsc: boolean,
+  ): Promise<string> {
     if (DUMP_KEYS) {
       this.deps.logger.log(
         `raw key bytes: ${JSON.stringify(Array.from(chunk, (c) => c.charCodeAt(0)))}`,
@@ -187,7 +225,7 @@ export class Interceptor {
       return "";
     }
 
-    const crIdx = findBareCR(chunk);
+    const crIdx = findBareCR(chunk, prevEndedWithEsc);
     if (crIdx === -1) return chunk;
 
     // FAST PATH 1: autocomplete popup open — Enter selects from it, not
@@ -345,10 +383,13 @@ export class Interceptor {
     // prompt (no prior Claude turn), when disabled via env, and when the
     // input has too little Korean to anchor the translation (context would
     // otherwise hijack a small model — see contextHintEligible).
+    // maxChars rides the same KLAUDE_CONTEXT_CHARS knob as the translator's
+    // own clipping (contextSection) — previously the mirror capped at a
+    // hardcoded 1200, silently defeating env values above that.
     const context =
       CONTEXT_DISABLED || this.translatedCount === 0 || !contextHintEligible(input)
         ? undefined
-        : (this.deps.mirror.recentContext() ?? undefined);
+        : (this.deps.mirror.recentContext(undefined, MAX_CONTEXT_CHARS) ?? undefined);
     this.translatedCount++;
 
     // Show a "translating" indicator in the input box so the user gets
@@ -441,11 +482,18 @@ export class Interceptor {
 /**
  * Find a CR that signals "submit" — bare \r not preceded by ESC.
  * Returns -1 if no submit CR is in the chunk.
+ *
+ * `prevChunkEndedWithEsc` covers the cross-chunk split: on slow links
+ * (SSH, high-latency terminals) a Shift+Enter's two bytes can arrive as
+ * separate stdin chunks — ESC at the tail of one, CR at the head of the
+ * next. Without the flag the CR looks bare and would wrongly trigger a
+ * translate+submit mid-compose.
  */
-export function findBareCR(chunk: string): number {
+export function findBareCR(chunk: string, prevChunkEndedWithEsc = false): number {
   for (let i = 0; i < chunk.length; i++) {
     if (chunk[i] !== CR) continue;
     if (i > 0 && chunk[i - 1] === ESC) continue; // Shift+Enter (ESC+CR)
+    if (i === 0 && prevChunkEndedWithEsc) continue; // split Shift+Enter
     return i;
   }
   return -1;

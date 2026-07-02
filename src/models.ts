@@ -25,9 +25,20 @@ function currentModel(cfg: Config): string | null {
 export async function listOllamaModels(host: string): Promise<OllamaModel[]> {
   const res = await fetch(`${host}/api/tags`);
   if (!res.ok) throw new Error(`ollama ${res.status}`);
-  const json = (await res.json()) as { models?: Array<{ name: string; size: number }> };
+  const json = (await res.json()) as {
+    models?: Array<{ name?: unknown; size?: unknown }>;
+  };
+  if (json.models !== undefined && !Array.isArray(json.models)) {
+    throw new Error(
+      `ollama: unexpected /api/tags response shape: ${JSON.stringify(json)?.slice(0, 200)}`,
+    );
+  }
   return (json.models ?? [])
-    .map((m) => ({ name: m.name, sizeBytes: m.size }))
+    .filter((m) => typeof m?.name === "string")
+    .map((m) => ({
+      name: m.name as string,
+      sizeBytes: typeof m.size === "number" ? m.size : 0,
+    }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

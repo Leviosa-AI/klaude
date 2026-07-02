@@ -413,9 +413,13 @@ const POPUP_ITEM_PATTERN =
 /**
  * Claude Code renders a status bar / hint line below the input
  * (e.g. "? for shortcuts", model name, etc).
+ *
+ * `/rc active` is the Remote Control footer pill (Claude Code v2.1.154+);
+ * without it that row would be swept into input extraction / recentContext
+ * as noise whenever Remote Control is on.
  */
 function looksLikeStatusBar(row: string): boolean {
-  return /\? for shortcuts|esc to interrupt|Bypassing Permissions|Esc to cancel|Tab to amend|ctrl\+e to explain/i.test(
+  return /\? for shortcuts|esc to interrupt|Bypassing Permissions|Esc to cancel|Tab to amend|ctrl\+e to explain|\/rc active/i.test(
     row,
   );
 }
