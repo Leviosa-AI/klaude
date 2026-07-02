@@ -4,6 +4,7 @@ import {
   findBareCR,
   hasAttachmentMarker,
   isBashPrefix,
+  isEscCancel,
   isRawSubmitChord,
   isSelectionMenuPrompt,
   sanitizeForRetype,
@@ -34,6 +35,25 @@ describe("findBareCR", () => {
 
   it("handles consecutive CRs", () => {
     expect(findBareCR("\r\r")).toBe(0);
+  });
+});
+
+describe("isEscCancel", () => {
+  it("matches a bare ESC byte", () => {
+    expect(isEscCancel("\x1b")).toBe(true);
+  });
+
+  it("rejects escape SEQUENCES that merely start with ESC", () => {
+    expect(isEscCancel("\x1b[A")).toBe(false); // arrow up
+    expect(isEscCancel("\x1b\r")).toBe(false); // Shift+Enter
+    expect(isEscCancel("\x1b[27;5;13~")).toBe(false); // Ctrl+Enter chord
+    expect(isEscCancel("\x1bOP")).toBe(false); // F1
+  });
+
+  it("rejects ordinary input", () => {
+    expect(isEscCancel("")).toBe(false);
+    expect(isEscCancel("a")).toBe(false);
+    expect(isEscCancel("\r")).toBe(false);
   });
 });
 

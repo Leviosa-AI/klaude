@@ -25,6 +25,38 @@ function scriptedTranslator(
   };
 }
 
+describe("translatePrompt — cancel signal", () => {
+  it("threads the AbortSignal through to the translator", async () => {
+    const seen: Array<AbortSignal | undefined> = [];
+    const t: Translator = {
+      async translate(_text, _context, signal) {
+        seen.push(signal);
+        return "Hello";
+      },
+    };
+    const ctrl = new AbortController();
+    await translatePrompt("안녕", t, "ko", undefined, undefined, undefined, ctrl.signal);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toBe(ctrl.signal);
+  });
+
+  it("propagates the translator's abort rejection (no swallow, no retry)", async () => {
+    let calls = 0;
+    const t: Translator = {
+      async translate() {
+        calls++;
+        throw new DOMException("aborted", "AbortError");
+      },
+    };
+    const ctrl = new AbortController();
+    ctrl.abort();
+    await expect(
+      translatePrompt("안녕", t, "ko", undefined, undefined, undefined, ctrl.signal),
+    ).rejects.toThrow();
+    expect(calls).toBe(1); // abort must NOT trigger the stricter-prompt retry
+  });
+});
+
 describe("translatePrompt — basic flow", () => {
   it("returns input unchanged when no CJK", async () => {
     const t = scriptedTranslator(["should not be called"]);

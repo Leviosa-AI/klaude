@@ -117,6 +117,13 @@ export class Interceptor {
   private deps: InterceptDeps;
   private busy = false;
   /**
+   * Cancel handle for the in-flight translation. Non-null exactly while the
+   * slow path holds `busy`. Aborted ONLY by the user pressing ESC — the
+   * Ollama request timeout uses its own internal controller, so an aborted
+   * signal here always means "user cancelled", never "timed out".
+   */
+  private cancelCtrl: AbortController | null = null;
+  /**
    * How many Korean prompts we've translated this session. Used to gate the
    * conversation-context hint: the FIRST translated prompt has no prior
    * Claude turn to learn from (the screen shows only the welcome banner), so
@@ -144,6 +151,8 @@ export class Interceptor {
    *     them — the residue prepends to our translated retype.
    *   - Trade-off: brief keystroke loss while translating. The on-screen
    *     "🔄 번역중..." indicator signals to stop typing.
+   *   - EXCEPTION: a bare ESC while busy is the cancel signal — it aborts
+   *     the in-flight translation instead of being dropped (see isEscCancel).
    */
   async handleKeyInput(chunk: string): Promise<string> {
     if (DUMP_KEYS) {
@@ -152,7 +161,18 @@ export class Interceptor {
       );
     }
 
-    if (this.busy) return this.dropAll(chunk, "busy");
+    if (this.busy) {
+      // ESC while translating = cancel. Abort the in-flight translation;
+      // the slow path's catch removes the indicator and leaves the user's
+      // original Korean in the editor, unsubmitted. The ESC itself is NOT
+      // forwarded to claude (it would interrupt/clear claude's own state).
+      if (isEscCancel(chunk) && this.cancelCtrl) {
+        this.deps.logger.log("ESC during translation — cancelling");
+        this.cancelCtrl.abort();
+        return "";
+      }
+      return this.dropAll(chunk, "busy");
+    }
 
     // RAW SUBMIT (Ctrl+Enter): submit the current input untranslated. The
     // chord arrives as a CSI sequence, not a bare CR, so findBareCR below
@@ -259,6 +279,7 @@ export class Interceptor {
     // Claim the lock synchronously before any await — closes the race
     // window so concurrent CRs from double-Enter get dropped.
     this.busy = true;
+    this.cancelCtrl = new AbortController();
     try {
       const before = chunk.slice(0, crIdx);
       const after = chunk.slice(crIdx + 1);
@@ -280,6 +301,7 @@ export class Interceptor {
       return "";
     } finally {
       this.busy = false;
+      this.cancelCtrl = null;
     }
   }
 
@@ -333,7 +355,7 @@ export class Interceptor {
     // immediate visual feedback. The slow part is the translation call
     // itself (Ollama gemma3:4b ~1-4s); without this the user just sees
     // their input frozen with no response, easy to mistake for a hang.
-    const indicator = " 🔄 번역중...";
+    const indicator = " 🔄 번역중... (esc 취소)";
     this.deps.pty.write(CTRL_E);
     await sleep(5);
     this.deps.pty.write(BPASTE_START + indicator + BPASTE_END);
@@ -368,7 +390,16 @@ export class Interceptor {
           );
         },
         context,
+        this.cancelCtrl?.signal,
       );
+
+      // ESC landed in the last moments while the translation was resolving —
+      // honor the cancel: keep the original input, don't clear, don't submit.
+      if (this.cancelCtrl?.signal.aborted) {
+        this.deps.logger.log("translation cancelled (ESC) — keeping original input");
+        removeIndicator();
+        return true;
+      }
       if (context) this.deps.logger.log("context hint chars:", String(context.length));
       this.deps.logger.log("translated:", translated);
 
@@ -388,11 +419,19 @@ export class Interceptor {
       this.deps.pty.write(CR);
       return true;
     } catch (err) {
-      this.deps.logger.log("translation FAILED, submitting original:", String(err));
       removeIndicator();
       await sleep(20);
-      // Original Korean is still in the editor (indicator was appended,
-      // not replacing). Just submit it.
+      // User cancelled with ESC: keep the original Korean in the editor
+      // (indicator was appended, not replacing) and do NOT submit — the
+      // user can edit it or press Enter again. Note: an Ollama TIMEOUT
+      // abort throws the same AbortError but does not abort cancelCtrl,
+      // so it correctly falls through to the submit-original path below.
+      if (this.cancelCtrl?.signal.aborted) {
+        this.deps.logger.log("translation cancelled (ESC) — keeping original input");
+        return true;
+      }
+      this.deps.logger.log("translation FAILED, submitting original:", String(err));
+      // Original Korean is still in the editor. Just submit it.
       this.deps.pty.write(CR);
       return true;
     }
@@ -485,6 +524,17 @@ export function isBashPrefix(text: string): boolean {
  */
 export function isRawSubmitChord(chunk: string): boolean {
   return RAW_SUBMIT_CHORD.test(chunk);
+}
+
+/**
+ * Is this keyboard chunk a bare ESC key press (translation-cancel signal)?
+ * A standalone ESC arrives as exactly one \x1b byte. Multi-byte chunks that
+ * merely START with \x1b are escape SEQUENCES (arrow keys `\x1b[A`, Shift+
+ * Enter `\x1b\r`, function keys, ...) — not a cancel — so require an exact
+ * single-byte match.
+ */
+export function isEscCancel(chunk: string): boolean {
+  return chunk === ESC;
 }
 
 export function sanitizeForRetype(text: string): string {

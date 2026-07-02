@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **ESC cancels an in-flight translation.** While the `🔄 번역중...` indicator
+  is showing, pressing `ESC` aborts the translation request (Ollama fetch or
+  Haiku API call), removes the indicator, and leaves the original Korean in
+  the input box unsubmitted — ready to edit or resubmit. Previously there was
+  no way out of a slow translation: every keystroke, ESC included, was dropped
+  until it finished. Escape sequences that merely start with ESC (arrow keys,
+  Shift+Enter, Ctrl+Enter) are not mistaken for the cancel key. The indicator
+  now reads `🔄 번역중... (esc 취소)` to advertise the shortcut.
+
 ## [0.2.2] - 2026-06-19
 
 ### Fixed
