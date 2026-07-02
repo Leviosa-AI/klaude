@@ -3,7 +3,7 @@ import type { ScreenMirror } from "./mirror.js";
 import type { PtyHandle } from "./pty.js";
 import { cjkCharCount, needsTranslation } from "./tokenize.js";
 import type { Translator } from "./translate.js";
-import { translatePrompt } from "./translate.js";
+import { MAX_CONTEXT_CHARS, translatePrompt } from "./translate.js";
 
 /**
  * Enter-time interception flow.
@@ -74,6 +74,16 @@ const DUMP_KEYS = process.env.KLAUDE_DUMP_KEYS === "1";
 const RENDER_DELAY_MS = Number(process.env.KLAUDE_RENDER_DELAY) || 80;
 
 /**
+ * How long an ESC at the tail of one chunk stays "armed" as the possible
+ * first half of a split Shift+Enter (ESC in one stdin chunk, CR at the head
+ * of the next — happens on SSH / high-latency links). Split halves arrive
+ * back-to-back (sub-10ms); a deliberate ESC-then-Enter as two keypresses is
+ * far slower, so a short window disambiguates the two without misreading a
+ * real submit after a standalone ESC.
+ */
+const SPLIT_ESC_WINDOW_MS = 100;
+
+/**
  * Extra DEL keystrokes beyond the measured char count, in case claude's
  * editor counts graphemes differently than Array.from(input).length. A
  * harmless over-delete: if too many DELs hit an empty editor, claude
@@ -117,6 +127,13 @@ export class Interceptor {
   private deps: InterceptDeps;
   private busy = false;
   /**
+   * Cancel handle for the in-flight translation. Non-null exactly while the
+   * slow path holds `busy`. Aborted ONLY by the user pressing ESC — the
+   * Ollama request timeout uses its own internal controller, so an aborted
+   * signal here always means "user cancelled", never "timed out".
+   */
+  private cancelCtrl: AbortController | null = null;
+  /**
    * How many Korean prompts we've translated this session. Used to gate the
    * conversation-context hint: the FIRST translated prompt has no prior
    * Claude turn to learn from (the screen shows only the welcome banner), so
@@ -130,9 +147,34 @@ export class Interceptor {
   }
 
   /**
+   * Did the LAST bytes forwarded to claude end with a lone ESC, and when?
+   * Tracked on the wrapper's return value (what index.ts actually forwards)
+   * so a swallowed ESC — e.g. the translation-cancel key — never arms the
+   * flag. Used to recognize a Shift+Enter split across two stdin chunks.
+   */
+  private forwardedTailEsc = false;
+  private forwardedTailEscAt = 0;
+
+  /**
    * Process a chunk of bytes from the user's keyboard. Returns the chunk
    * to forward to claude (may be empty if we're intercepting).
    *
+   * This wrapper adds cross-chunk Shift+Enter context around the real
+   * handler: a CR at the head of this chunk is NOT a submit if the
+   * previously FORWARDED chunk ended with ESC moments ago (split
+   * Shift+Enter — see SPLIT_ESC_WINDOW_MS).
+   */
+  async handleKeyInput(chunk: string): Promise<string> {
+    const prevEndedWithEsc =
+      this.forwardedTailEsc &&
+      Date.now() - this.forwardedTailEscAt <= SPLIT_ESC_WINDOW_MS;
+    const out = await this.processKeyInput(chunk, prevEndedWithEsc);
+    this.forwardedTailEsc = out.endsWith(ESC);
+    if (this.forwardedTailEsc) this.forwardedTailEscAt = Date.now();
+    return out;
+  }
+
+  /**
    * Concurrency model:
    *   - this.busy is claimed SYNCHRONOUSLY when a CR is detected, before
    *     any await. Subsequent handleKeyInput invocations that see busy=true
@@ -144,15 +186,31 @@ export class Interceptor {
    *     them — the residue prepends to our translated retype.
    *   - Trade-off: brief keystroke loss while translating. The on-screen
    *     "🔄 번역중..." indicator signals to stop typing.
+   *   - EXCEPTION: a bare ESC while busy is the cancel signal — it aborts
+   *     the in-flight translation instead of being dropped (see isEscCancel).
    */
-  async handleKeyInput(chunk: string): Promise<string> {
+  private async processKeyInput(
+    chunk: string,
+    prevEndedWithEsc: boolean,
+  ): Promise<string> {
     if (DUMP_KEYS) {
       this.deps.logger.log(
         `raw key bytes: ${JSON.stringify(Array.from(chunk, (c) => c.charCodeAt(0)))}`,
       );
     }
 
-    if (this.busy) return this.dropAll(chunk, "busy");
+    if (this.busy) {
+      // ESC while translating = cancel. Abort the in-flight translation;
+      // the slow path's catch removes the indicator and leaves the user's
+      // original Korean in the editor, unsubmitted. The ESC itself is NOT
+      // forwarded to claude (it would interrupt/clear claude's own state).
+      if (isEscCancel(chunk) && this.cancelCtrl) {
+        this.deps.logger.log("ESC during translation — cancelling");
+        this.cancelCtrl.abort();
+        return "";
+      }
+      return this.dropAll(chunk, "busy");
+    }
 
     // RAW SUBMIT (Ctrl+Enter): submit the current input untranslated. The
     // chord arrives as a CSI sequence, not a bare CR, so findBareCR below
@@ -167,7 +225,7 @@ export class Interceptor {
       return "";
     }
 
-    const crIdx = findBareCR(chunk);
+    const crIdx = findBareCR(chunk, prevEndedWithEsc);
     if (crIdx === -1) return chunk;
 
     // FAST PATH 1: autocomplete popup open — Enter selects from it, not
@@ -259,6 +317,7 @@ export class Interceptor {
     // Claim the lock synchronously before any await — closes the race
     // window so concurrent CRs from double-Enter get dropped.
     this.busy = true;
+    this.cancelCtrl = new AbortController();
     try {
       const before = chunk.slice(0, crIdx);
       const after = chunk.slice(crIdx + 1);
@@ -280,6 +339,7 @@ export class Interceptor {
       return "";
     } finally {
       this.busy = false;
+      this.cancelCtrl = null;
     }
   }
 
@@ -323,17 +383,20 @@ export class Interceptor {
     // prompt (no prior Claude turn), when disabled via env, and when the
     // input has too little Korean to anchor the translation (context would
     // otherwise hijack a small model — see contextHintEligible).
+    // maxChars rides the same KLAUDE_CONTEXT_CHARS knob as the translator's
+    // own clipping (contextSection) — previously the mirror capped at a
+    // hardcoded 1200, silently defeating env values above that.
     const context =
       CONTEXT_DISABLED || this.translatedCount === 0 || !contextHintEligible(input)
         ? undefined
-        : (this.deps.mirror.recentContext() ?? undefined);
+        : (this.deps.mirror.recentContext(undefined, MAX_CONTEXT_CHARS) ?? undefined);
     this.translatedCount++;
 
     // Show a "translating" indicator in the input box so the user gets
     // immediate visual feedback. The slow part is the translation call
     // itself (Ollama gemma3:4b ~1-4s); without this the user just sees
     // their input frozen with no response, easy to mistake for a hang.
-    const indicator = " 🔄 번역중...";
+    const indicator = " 🔄 번역중... (esc 취소)";
     this.deps.pty.write(CTRL_E);
     await sleep(5);
     this.deps.pty.write(BPASTE_START + indicator + BPASTE_END);
@@ -368,7 +431,16 @@ export class Interceptor {
           );
         },
         context,
+        this.cancelCtrl?.signal,
       );
+
+      // ESC landed in the last moments while the translation was resolving —
+      // honor the cancel: keep the original input, don't clear, don't submit.
+      if (this.cancelCtrl?.signal.aborted) {
+        this.deps.logger.log("translation cancelled (ESC) — keeping original input");
+        removeIndicator();
+        return true;
+      }
       if (context) this.deps.logger.log("context hint chars:", String(context.length));
       this.deps.logger.log("translated:", translated);
 
@@ -388,11 +460,19 @@ export class Interceptor {
       this.deps.pty.write(CR);
       return true;
     } catch (err) {
-      this.deps.logger.log("translation FAILED, submitting original:", String(err));
       removeIndicator();
       await sleep(20);
-      // Original Korean is still in the editor (indicator was appended,
-      // not replacing). Just submit it.
+      // User cancelled with ESC: keep the original Korean in the editor
+      // (indicator was appended, not replacing) and do NOT submit — the
+      // user can edit it or press Enter again. Note: an Ollama TIMEOUT
+      // abort throws the same AbortError but does not abort cancelCtrl,
+      // so it correctly falls through to the submit-original path below.
+      if (this.cancelCtrl?.signal.aborted) {
+        this.deps.logger.log("translation cancelled (ESC) — keeping original input");
+        return true;
+      }
+      this.deps.logger.log("translation FAILED, submitting original:", String(err));
+      // Original Korean is still in the editor. Just submit it.
       this.deps.pty.write(CR);
       return true;
     }
@@ -402,11 +482,18 @@ export class Interceptor {
 /**
  * Find a CR that signals "submit" — bare \r not preceded by ESC.
  * Returns -1 if no submit CR is in the chunk.
+ *
+ * `prevChunkEndedWithEsc` covers the cross-chunk split: on slow links
+ * (SSH, high-latency terminals) a Shift+Enter's two bytes can arrive as
+ * separate stdin chunks — ESC at the tail of one, CR at the head of the
+ * next. Without the flag the CR looks bare and would wrongly trigger a
+ * translate+submit mid-compose.
  */
-export function findBareCR(chunk: string): number {
+export function findBareCR(chunk: string, prevChunkEndedWithEsc = false): number {
   for (let i = 0; i < chunk.length; i++) {
     if (chunk[i] !== CR) continue;
     if (i > 0 && chunk[i - 1] === ESC) continue; // Shift+Enter (ESC+CR)
+    if (i === 0 && prevChunkEndedWithEsc) continue; // split Shift+Enter
     return i;
   }
   return -1;
@@ -485,6 +572,17 @@ export function isBashPrefix(text: string): boolean {
  */
 export function isRawSubmitChord(chunk: string): boolean {
   return RAW_SUBMIT_CHORD.test(chunk);
+}
+
+/**
+ * Is this keyboard chunk a bare ESC key press (translation-cancel signal)?
+ * A standalone ESC arrives as exactly one \x1b byte. Multi-byte chunks that
+ * merely START with \x1b are escape SEQUENCES (arrow keys `\x1b[A`, Shift+
+ * Enter `\x1b\r`, function keys, ...) — not a cancel — so require an exact
+ * single-byte match.
+ */
+export function isEscCancel(chunk: string): boolean {
+  return chunk === ESC;
 }
 
 export function sanitizeForRetype(text: string): string {

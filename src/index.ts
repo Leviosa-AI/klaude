@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfig, resolveBackendFromEnv, saveConfig } from "./config.js";
+import { HAIKU_MODEL, loadConfig, resolveBackendFromEnv, saveConfig } from "./config.js";
 import { installRules, maybePromptForRulesInstall, uninstallRules } from "./firstRun.js";
 import { Interceptor } from "./intercept.js";
 import { makeLogger } from "./log.js";
@@ -139,7 +139,7 @@ function handleConfigCmd(args: string[]) {
           host: process.env.OLLAMA_HOST ?? "http://localhost:11434",
         };
       } else if (value.startsWith("haiku")) {
-        cfg.backend = { kind: "haiku", model: "claude-haiku-4-5-20251001" };
+        cfg.backend = { kind: "haiku", model: HAIKU_MODEL };
       } else {
         console.error(`unknown backend: ${value}`);
         process.exit(1);
@@ -233,6 +233,13 @@ Env:
 }
 
 main().catch((err) => {
-  console.error(err);
+  // Expected user-facing errors (bad config, missing API key, ...) are
+  // prefixed "klaude:" — show just the message, not a stack trace. Anything
+  // else is a real bug and keeps the full stack for reporting.
+  if (err instanceof Error && err.message.startsWith("klaude:")) {
+    console.error(err.message);
+  } else {
+    console.error(err);
+  }
   process.exit(1);
 });

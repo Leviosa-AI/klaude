@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-02
+
+### Added
+
+- **ESC cancels an in-flight translation.** While the `🔄 번역중...` indicator
+  is showing, pressing `ESC` aborts the translation request (Ollama fetch or
+  Haiku API call), removes the indicator, and leaves the original Korean in
+  the input box unsubmitted — ready to edit or resubmit. Previously there was
+  no way out of a slow translation: every keystroke, ESC included, was dropped
+  until it finished. Escape sequences that merely start with ESC (arrow keys,
+  Shift+Enter, Ctrl+Enter) are not mistaken for the cancel key. The indicator
+  now reads `🔄 번역중... (esc 취소)` to advertise the shortcut.
+- **TUI regression fixtures.** New `mirror.fixtures.test.ts` renders full
+  Claude Code screens (welcome, popups, permission menus, ✓ Submit widget,
+  bash mode, boxed modals, Remote Control footer, attachments) and asserts
+  every screen heuristic per fixture — a safety net for future Claude Code
+  TUI changes, with instructions for capturing real screens as new fixtures.
+
+### Fixed
+
+- **Split Shift+Enter no longer mis-fires a submit.** On slow links (SSH),
+  Shift+Enter's two bytes can arrive as separate stdin chunks — ESC at the
+  tail of one, CR at the head of the next. The CR looked bare and triggered a
+  translate+submit mid-compose. klaude now remembers a just-forwarded
+  trailing ESC (100ms window) and passes the paired CR through instead.
+- **`KLAUDE_CONTEXT_CHARS` now actually raises the context budget.** The env
+  var clipped the translator-side text but the screen mirror capped its
+  collection at a hardcoded 1200 chars, silently defeating larger values.
+  Both sides now ride the same knob.
+- **Invalid `~/.klaude/config.json` fails with a helpful message.** A corrupt
+  or hand-mangled config (typo'd backend kind, string `"true"` for debug,
+  malformed glossary) used to crash deep inside the translator with an opaque
+  stack. Config is now validated on load; the error names the bad key and how
+  to reset. Also fixed `loadConfig` returning a shallow copy whose glossary
+  array aliased the shared defaults.
+- **Unexpected Ollama responses are reported clearly.** `/api/chat` and
+  `/api/tags` bodies are shape-checked before use, so a proxy error page or
+  API change surfaces as `ollama: unexpected ... response shape` instead of
+  an opaque TypeError.
+- **Remote Control footer (`/rc active`, Claude Code v2.1.154+) is now
+  recognized as status-bar chrome** so it can't leak into input extraction
+  or the translation context hint.
+
+### Changed
+
+- The default Haiku model id is defined once (`HAIKU_MODEL` in config.ts)
+  instead of hardcoded in three places.
+
 ## [0.2.2] - 2026-06-19
 
 ### Fixed

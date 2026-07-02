@@ -86,6 +86,7 @@ if you'd written perfect English yourself.
 - `@path`, `/command`, code stay verbatim
 - Translated to English on Enter
 - **`Ctrl+Enter` sends your Korean as-is**, untranslated
+- **`ESC` cancels** an in-flight translation — your original input stays put
 - Claude **replies in Korean**
 
 </td>
@@ -188,6 +189,9 @@ Key properties:
   command and is never translated (see [Smart pass-through](#smart-pass-through)).
 - **Ctrl+Enter submits raw.** Press `Ctrl+Enter` to skip translation and send your
   Korean through as-is (see [Submit raw](#submit-raw-ctrlenter)).
+- **ESC cancels translation.** Press `ESC` while the `🔄 번역중...` indicator is up
+  to abort the translation. Your original Korean stays in the input box, ready to
+  edit or resubmit.
 
 ## Token preservation
 
@@ -462,6 +466,8 @@ klaude uninstall-rules
 | `KLAUDE_RENDER_DELAY` | Milliseconds to wait after Enter before reading the screen. Default `80` |
 | `KLAUDE_DUMP_KEYS` | `=1` logs raw keyboard byte codes to the debug log (also enables logging on its own). Diagnoses key-chord encodings — e.g. Ctrl+Enter |
 | `KLAUDE_DUMP_POPUP` | `=1` dumps the screen on every Enter. Diagnoses the autocomplete-popup detector |
+| `KLAUDE_NO_CONTEXT` | `=1` disables passing Claude's recent output to the translator as a terminology hint |
+| `KLAUDE_CONTEXT_CHARS` | Max recent-conversation characters used as the terminology hint. Default `1200` |
 
 ## Development
 

@@ -63,8 +63,10 @@ export interface Translator {
    * Translate `text`. `context` is OPTIONAL recent-conversation text used
    * purely as a terminology/disambiguation hint — it is never translated or
    * echoed. Implementations append it to the system prompt as reference.
+   * `signal` aborts the in-flight request (user pressed ESC mid-translation);
+   * implementations reject with an AbortError-like error when it fires.
    */
-  translate(text: string, context?: string): Promise<string>;
+  translate(text: string, context?: string, signal?: AbortSignal): Promise<string>;
 }
 
 /**
@@ -73,7 +75,7 @@ export interface Translator {
  * doesn't translate or repeat it. Trimmed to the tail (most recent) and
  * capped so it never dominates a small local model's context window.
  */
-const MAX_CONTEXT_CHARS = Number(process.env.KLAUDE_CONTEXT_CHARS ?? 1200);
+export const MAX_CONTEXT_CHARS = Number(process.env.KLAUDE_CONTEXT_CHARS ?? 1200);
 
 function contextSection(context?: string): string {
   if (!context) return "";
@@ -123,13 +125,16 @@ class HaikuTranslator implements Translator {
     this.system = SYSTEM_PROMPT(src, tgt, glossary);
   }
 
-  async translate(text: string, context?: string): Promise<string> {
-    const res = await this.client.messages.create({
-      model: this.model,
-      max_tokens: 4096,
-      system: this.system + contextSection(context),
-      messages: [{ role: "user", content: text }],
-    });
+  async translate(text: string, context?: string, signal?: AbortSignal): Promise<string> {
+    const res = await this.client.messages.create(
+      {
+        model: this.model,
+        max_tokens: 4096,
+        system: this.system + contextSection(context),
+        messages: [{ role: "user", content: text }],
+      },
+      { signal },
+    );
     const block = res.content.find((b) => b.type === "text");
     if (block?.type !== "text") {
       throw new Error("no text block in response");
@@ -154,10 +159,16 @@ class OllamaTranslator implements Translator {
     this.system = SYSTEM_PROMPT(src, tgt, glossary);
   }
 
-  async translate(text: string, context?: string): Promise<string> {
+  async translate(text: string, context?: string, signal?: AbortSignal): Promise<string> {
     const ctrl = new AbortController();
     const timeoutMs = Number(process.env.KLAUDE_OLLAMA_TIMEOUT_MS) || 30_000;
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    // Relay the caller's cancel signal into our timeout controller. We can't
+    // hand `signal` straight to fetch (the timeout needs its own abort), and
+    // AbortSignal.any() isn't available on all supported Node 20.x releases.
+    const onCancel = () => ctrl.abort(signal?.reason);
+    if (signal?.aborted) onCancel();
+    else signal?.addEventListener("abort", onCancel, { once: true });
     try {
       const res = await fetch(`${this.host}/api/chat`, {
         method: "POST",
@@ -173,10 +184,19 @@ class OllamaTranslator implements Translator {
         signal: ctrl.signal,
       });
       if (!res.ok) throw new Error(`ollama ${res.status}: ${await res.text()}`);
-      const json = (await res.json()) as { message: { content: string } };
-      return json.message.content.trim();
+      const json: unknown = await res.json();
+      const content = (json as { message?: { content?: unknown } })?.message?.content;
+      if (typeof content !== "string") {
+        // Don't trust the shape blindly — an unexpected body (proxy error
+        // page, API change) used to surface as an opaque TypeError here.
+        throw new Error(
+          `ollama: unexpected /api/chat response shape: ${JSON.stringify(json)?.slice(0, 200)}`,
+        );
+      }
+      return content.trim();
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", onCancel);
     }
   }
 }
@@ -197,10 +217,11 @@ export async function translatePrompt(
   onMissing?: (missing: string[]) => void,
   onUntranslated?: (stage: "first" | "retry", reason: string) => void,
   context?: string,
+  signal?: AbortSignal,
 ): Promise<string> {
   if (!needsTranslation(text)) return text;
   const { masked, tokens } = protect(text);
-  let translated = await translator.translate(masked, context);
+  let translated = await translator.translate(masked, context, signal);
 
   // Validate the translation against multiple failure modes that small
   // local models (gemma3:4b) routinely hit. Retry once with a stricter
@@ -217,7 +238,7 @@ export async function translatePrompt(
       `Preserve {K\\d+} tokens verbatim.\n\n${masked}`;
     // Retry WITHOUT context: the stricter directive wants a focused, literal
     // translation — extra reference text only risks re-confusing a small model.
-    translated = await translator.translate(stricterInput);
+    translated = await translator.translate(stricterInput, undefined, signal);
     const retryFailure = detectTranslationFailure(masked, translated);
     if (retryFailure) {
       onUntranslated?.("retry", retryFailure);

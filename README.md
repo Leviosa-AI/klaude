@@ -84,6 +84,7 @@ Claude는 영어로 생각할 때 가장 정확합니다. 그런데 한국 개�
 - `@path`, `/command`, 코드는 그대로 보존됩니다
 - Enter를 누르면 영어로 번역되어 전송됩니다
 - **`Ctrl+Enter`를 누르면 번역 없이 한국어 그대로** 전송됩니다
+- 번역 중에는 **`ESC`로 취소**할 수 있습니다 — 입력한 원문이 그대로 남습니다
 - Claude가 **한국어로 답합니다**
 
 </td>
@@ -178,6 +179,8 @@ claude 출력 ←─── node-pty ────────┘
   ([Smart pass-through](#smart-pass-through) 참고).
 - **Ctrl+Enter로 원문 제출.** 번역을 건너뛰고 한국어를 그대로 보내고 싶을 때는 `Ctrl+Enter`를
   누르면 됩니다 ([원문 그대로 보내기](#원문-그대로-보내기-ctrlenter) 참고).
+- **ESC로 번역 취소.** `🔄 번역중...` 표시가 떠 있는 동안 `ESC`를 누르면 번역을 중단합니다.
+  입력했던 한국어는 입력창에 그대로 남아 있어 수정하거나 다시 Enter를 누를 수 있습니다.
 
 ## Token preservation
 
@@ -435,6 +438,8 @@ klaude uninstall-rules
 | `KLAUDE_RENDER_DELAY` | Enter 후 화면을 읽기까지 대기 시간(ms). 기본 `80` |
 | `KLAUDE_DUMP_KEYS` | `=1`이면 키 입력 바이트를 디버그 로그에 기록합니다(로깅도 자동 활성화). 키 조합 인코딩 진단용 — 예: Ctrl+Enter |
 | `KLAUDE_DUMP_POPUP` | `=1`이면 Enter 시점마다 화면 덤프를 기록합니다. 자동완성 popup 감지 진단용 |
+| `KLAUDE_NO_CONTEXT` | `=1`이면 번역 시 Claude 최근 출력을 용어 힌트로 넘기지 않습니다 |
+| `KLAUDE_CONTEXT_CHARS` | 용어 힌트로 넘길 최근 대화 최대 글자 수. 기본 `1200` |
 
 ## Development
 
