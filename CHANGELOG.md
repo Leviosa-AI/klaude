@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Terminal no longer freezes while `🔄 번역중...` is showing.** The busy
+  guard dropped every stdin byte during a translation — including the mouse
+  escape sequences claude's mouse-tracking mode sends for wheel scroll and
+  clicks — so scrolling, clicking, and cursor movement all went dead for the
+  1–4s translation window. Buffer-neutral input now passes through while
+  translating: mouse events (SGR + legacy X10) and focus in/out always, and
+  Left/Right/Home/End when the input is single-line. Content-mutating keys
+  (printables, Enter, Up/Down history recall) are still dropped to protect
+  the clear-and-retype sequence.
+
 ## [0.3.0] - 2026-07-02
 
 ### Added

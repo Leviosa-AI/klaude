@@ -50,6 +50,34 @@ const BPASTE_END = "\x1b[201~";
 const RAW_SUBMIT_CHORD = /\x1b\[27;5;13~|\x1b\[13;5u/;
 
 /**
+ * Sequences that stay LIVE while a translation is in flight. The busy path
+ * drops keystrokes to protect the clear-and-retype dance, but claude keeps
+ * mouse reporting enabled — so wheel scroll and clicks arrive on stdin as
+ * escape sequences too. Dropping them made the whole terminal feel dead
+ * during the 1–4s translation (no scrolling, no clicking). None of these
+ * touch the editor BUFFER, so forwarding them is safe:
+ *   - SGR mouse (wheel/click/drag):  ESC [ < b ; x ; y M|m
+ *   - Legacy X10 mouse:              ESC [ M <3 bytes>
+ *   - Focus in/out:                  ESC [ I  /  ESC [ O
+ */
+const SGR_MOUSE_RE = /^\x1b\[<\d+;\d+;\d+[Mm]/;
+const X10_MOUSE_PREFIX = "\x1b[M";
+const X10_MOUSE_LEN = X10_MOUSE_PREFIX.length + 3;
+const FOCUS_RE = /^\x1b\[[IO]/;
+
+/**
+ * Horizontal cursor motion — Left/Right/Home/End in their CSI, SS3, and
+ * vt220 encodings. Forwarded while busy ONLY when the intercepted input is
+ * single-line: the post-translation wipe sends Ctrl+E (end of LINE, not
+ * buffer) before its DELs, so on one line any horizontal drift is undone,
+ * but in a multi-line input a Left at column 0 crosses to the previous line
+ * and the wipe would eat the wrong region. Up/Down are NEVER forwarded —
+ * at the buffer edge they recall prompt history, swapping the editor
+ * content out from under the measured-length wipe.
+ */
+const CURSOR_KEY_RE = /^(?:\x1b\[(?:[CDHF]|1~|4~)|\x1bO[CDHF])/;
+
+/**
  * When KLAUDE_DUMP_POPUP=1 is set, dump screen + heuristic results on EVERY
  * Enter attempt (not just failures). Used to diagnose the autocomplete
  * popup detector by comparing dumps with popup open vs closed.
@@ -134,6 +162,13 @@ export class Interceptor {
    */
   private cancelCtrl: AbortController | null = null;
   /**
+   * While busy: may horizontal cursor keys (Left/Right/Home/End) be
+   * forwarded? True only when the intercepted input is single-line — see
+   * CURSOR_KEY_RE for why multi-line cursor drift breaks the wipe. Mouse
+   * and focus sequences are forwarded regardless of this flag.
+   */
+  private busyCursorKeysSafe = false;
+  /**
    * How many Korean prompts we've translated this session. Used to gate the
    * conversation-context hint: the FIRST translated prompt has no prior
    * Claude turn to learn from (the screen shows only the welcome banner), so
@@ -178,16 +213,21 @@ export class Interceptor {
    * Concurrency model:
    *   - this.busy is claimed SYNCHRONOUSLY when a CR is detected, before
    *     any await. Subsequent handleKeyInput invocations that see busy=true
-   *     drop EVERYTHING (CRs and printable keys alike).
-   *   - Why drop printable keys too: during translation (~1–4s) the input
+   *     drop anything that could mutate the editor buffer (CRs and
+   *     printable keys alike).
+   *   - Why drop printable keys: during translation (~1–4s) the input
    *     box is being manipulated (indicator shown, then cleared+rewritten).
    *     If the user types extra chars in that window, claude renders them
    *     into the editor and our DEL × measured-old-length wipe won't catch
    *     them — the residue prepends to our translated retype.
    *   - Trade-off: brief keystroke loss while translating. The on-screen
    *     "🔄 번역중..." indicator signals to stop typing.
-   *   - EXCEPTION: a bare ESC while busy is the cancel signal — it aborts
+   *   - EXCEPTION 1: a bare ESC while busy is the cancel signal — it aborts
    *     the in-flight translation instead of being dropped (see isEscCancel).
+   *   - EXCEPTION 2: buffer-neutral sequences stay live — mouse events
+   *     (wheel scroll, clicks) and focus in/out always, horizontal cursor
+   *     keys when the input is single-line. Dropping these made the whole
+   *     terminal feel frozen while translating. See filterBusyPassthrough.
    */
   private async processKeyInput(
     chunk: string,
@@ -209,7 +249,13 @@ export class Interceptor {
         this.cancelCtrl.abort();
         return "";
       }
-      return this.dropAll(chunk, "busy");
+      // Keep the terminal alive: forward buffer-neutral sequences (mouse
+      // scroll/click, focus, single-line cursor keys), drop the rest.
+      const { forward, dropped } = filterBusyPassthrough(chunk, this.busyCursorKeysSafe);
+      if (dropped > 0) {
+        this.deps.logger.log(`dropped ${dropped} byte(s) of input — busy`);
+      }
+      return forward;
     }
 
     // RAW SUBMIT (Ctrl+Enter): submit the current input untranslated. The
@@ -318,6 +364,9 @@ export class Interceptor {
     // window so concurrent CRs from double-Enter get dropped.
     this.busy = true;
     this.cancelCtrl = new AbortController();
+    // Single-line input → horizontal cursor keys can't cross a line
+    // boundary, so they may stay live during the translation wait.
+    this.busyCursorKeysSafe = !preInput.includes("\n");
     try {
       const before = chunk.slice(0, crIdx);
       const after = chunk.slice(crIdx + 1);
@@ -340,6 +389,7 @@ export class Interceptor {
     } finally {
       this.busy = false;
       this.cancelCtrl = null;
+      this.busyCursorKeysSafe = false;
     }
   }
 
@@ -583,6 +633,43 @@ export function isRawSubmitChord(chunk: string): boolean {
  */
 export function isEscCancel(chunk: string): boolean {
   return chunk === ESC;
+}
+
+/**
+ * Split a while-busy keyboard chunk into bytes safe to forward and bytes to
+ * drop. Safe = sequences that never mutate the editor buffer: mouse events
+ * (wheel scroll, click, drag — SGR and X10 encodings), focus in/out, and —
+ * only when `allowCursorKeys` — horizontal cursor keys (Left/Right/Home/
+ * End). Everything else (printable chars, CR, Up/Down, unrecognized escape
+ * sequences) is dropped, preserving the clear-and-retype guarantees.
+ *
+ * A safe sequence split across two stdin chunks won't match and gets
+ * dropped — no worse than the drop-everything behavior this replaces.
+ */
+export function filterBusyPassthrough(
+  chunk: string,
+  allowCursorKeys: boolean,
+): { forward: string; dropped: number } {
+  let forward = "";
+  let dropped = 0;
+  for (let i = 0; i < chunk.length; ) {
+    const rest = chunk.slice(i);
+    let match = SGR_MOUSE_RE.exec(rest)?.[0] ?? FOCUS_RE.exec(rest)?.[0] ?? null;
+    if (!match && rest.startsWith(X10_MOUSE_PREFIX) && rest.length >= X10_MOUSE_LEN) {
+      match = rest.slice(0, X10_MOUSE_LEN);
+    }
+    if (!match && allowCursorKeys) {
+      match = CURSOR_KEY_RE.exec(rest)?.[0] ?? null;
+    }
+    if (match) {
+      forward += match;
+      i += match.length;
+    } else {
+      dropped++;
+      i++;
+    }
+  }
+  return { forward, dropped };
 }
 
 export function sanitizeForRetype(text: string): string {
