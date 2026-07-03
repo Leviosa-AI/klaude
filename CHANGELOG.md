@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-03
+
 ### Fixed
 
 - **Terminal no longer freezes while `🔄 번역중...` is showing.** The busy
@@ -266,5 +268,6 @@ First public release on npm.
 - Community files: `CONTRIBUTING.md`, `SECURITY.md`, bug-report and
   feature-request issue templates, and a PR template.
 
-[Unreleased]: https://github.com/Leviosa-AI/klaude/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Leviosa-AI/klaude/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/Leviosa-AI/klaude/compare/v0.3.0...v0.3.1
 [0.1.0]: https://github.com/Leviosa-AI/klaude/releases/tag/v0.1.0
