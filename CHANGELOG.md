@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **ESC now cancels a translation under the kitty keyboard protocol.**
+  Claude Code switches the terminal into the kitty keyboard protocol, where
+  the ESC key arrives as `CSI 27 u` (`\x1b[27u`, sometimes `\x1b[27;1u`) —
+  never as a bare `\x1b` byte. The cancel check only matched the bare byte,
+  so pressing ESC during `🔄 번역중...` was silently dropped as busy input
+  and the translation could not be cancelled. Both CSI-u encodings (and
+  mashed presses coalesced into one stdin chunk) are now recognized;
+  modified ESC (e.g. Ctrl+ESC) and other CSI-u keys still are not.
+
 ## [0.3.1] - 2026-07-03
 
 ### Fixed

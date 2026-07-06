@@ -57,10 +57,19 @@ describe("isEscCancel", () => {
     expect(isEscCancel("\x1b")).toBe(true);
   });
 
+  it("matches the kitty-protocol ESC key encodings", () => {
+    expect(isEscCancel("\x1b[27u")).toBe(true); // kitty disambiguate mode
+    expect(isEscCancel("\x1b[27;1u")).toBe(true); // with modifier field (1 = none)
+    expect(isEscCancel("\x1b[27u\x1b[27u")).toBe(true); // mashed presses, one chunk
+  });
+
   it("rejects escape SEQUENCES that merely start with ESC", () => {
     expect(isEscCancel("\x1b[A")).toBe(false); // arrow up
     expect(isEscCancel("\x1b\r")).toBe(false); // Shift+Enter
     expect(isEscCancel("\x1b[27;5;13~")).toBe(false); // Ctrl+Enter chord
+    expect(isEscCancel("\x1b[13;5u")).toBe(false); // kitty Ctrl+Enter
+    expect(isEscCancel("\x1b[27;5u")).toBe(false); // kitty Ctrl+ESC (modified)
+    expect(isEscCancel("\x1b\x1b")).toBe(false); // Alt+ESC / sequence fragment
     expect(isEscCancel("\x1bOP")).toBe(false); // F1
   });
 

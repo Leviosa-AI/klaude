@@ -222,8 +222,9 @@ export class Interceptor {
    *     them — the residue prepends to our translated retype.
    *   - Trade-off: brief keystroke loss while translating. The on-screen
    *     "🔄 번역중..." indicator signals to stop typing.
-   *   - EXCEPTION 1: a bare ESC while busy is the cancel signal — it aborts
-   *     the in-flight translation instead of being dropped (see isEscCancel).
+   *   - EXCEPTION 1: the ESC key while busy (bare \x1b or its kitty CSI-u
+   *     encodings) is the cancel signal — it aborts the in-flight
+   *     translation instead of being dropped (see isEscCancel).
    *   - EXCEPTION 2: buffer-neutral sequences stay live — mouse events
    *     (wheel scroll, clicks) and focus in/out always, horizontal cursor
    *     keys when the input is single-line. Dropping these made the whole
@@ -625,14 +626,29 @@ export function isRawSubmitChord(chunk: string): boolean {
 }
 
 /**
- * Is this keyboard chunk a bare ESC key press (translation-cancel signal)?
- * A standalone ESC arrives as exactly one \x1b byte. Multi-byte chunks that
- * merely START with \x1b are escape SEQUENCES (arrow keys `\x1b[A`, Shift+
- * Enter `\x1b\r`, function keys, ...) — not a cancel — so require an exact
- * single-byte match.
+ * Is this keyboard chunk an ESC key press (translation-cancel signal)?
+ *
+ * Three encodings, depending on the keyboard mode claude has switched the
+ * terminal into (same reason RAW_SUBMIT_CHORD accepts two):
+ *   - legacy:         a standalone \x1b byte
+ *   - Kitty keyboard protocol (disambiguate flag): ESC [ 27 u, some
+ *     terminals with the modifier field → ESC [ 27 ; 1 u  (modifier 1 =
+ *     none). Under this mode a bare \x1b is NEVER sent for the ESC key —
+ *     observed live as 5-byte "dropped … busy" chunks while a user mashed
+ *     ESC against a slow translation, with the cancel not firing.
+ *
+ * Multi-byte chunks that merely START with \x1b are other escape SEQUENCES
+ * (arrow keys `\x1b[A`, Shift+Enter `\x1b\r`, kitty Ctrl+Enter
+ * `\x1b[13;5u`, ...) — not a cancel — so the match is exact, and only
+ * modifier-less ESC (`;1`) qualifies. One asymmetry: a bare \x1b must be
+ * ALONE in its chunk (\x1b\x1b could be Alt+ESC or a sequence fragment),
+ * but kitty ESC encodings are unambiguous, so a chunk of several — mashed
+ * ESC presses coalesced into one stdin read — still cancels.
  */
+const ESC_CANCEL_RE = /^\x1b$|^(?:\x1b\[27(?:;1)?u)+$/;
+
 export function isEscCancel(chunk: string): boolean {
-  return chunk === ESC;
+  return ESC_CANCEL_RE.test(chunk);
 }
 
 /**
