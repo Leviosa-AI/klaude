@@ -85,6 +85,49 @@ describe("Interceptor — ESC cancels in-flight translation", () => {
     expect(h.writes.some((w) => w.includes("\x7f"))).toBe(true);
   });
 
+  it("cancels on the Kitty-protocol ESC encoding (\\x1b[27u)", async () => {
+    // Claude switches the terminal into the kitty keyboard protocol, where
+    // the ESC key arrives as CSI 27u — never as a bare \x1b. Regression:
+    // 0.3.x only matched the bare byte, so ESC mashing was dropped as
+    // "busy" and the translation could not be cancelled.
+    const h = makeHarness();
+
+    const enter = h.interceptor.handleKeyInput("\r");
+    await sleep(MID_FLIGHT_MS);
+    const escReturn = await h.interceptor.handleKeyInput("\x1b[27u");
+    await enter;
+
+    expect(h.getSawAbort()).toBe(true);
+    expect(escReturn).toBe("");
+    expect(h.writes).not.toContain("\r");
+  });
+
+  it("cancels on the modifier-field variant (\\x1b[27;1u)", async () => {
+    const h = makeHarness();
+
+    const enter = h.interceptor.handleKeyInput("\r");
+    await sleep(MID_FLIGHT_MS);
+    await h.interceptor.handleKeyInput("\x1b[27;1u");
+    await enter;
+
+    expect(h.getSawAbort()).toBe(true);
+    expect(h.writes).not.toContain("\r");
+  });
+
+  it("does not cancel on other kitty CSI-u keys (Ctrl+Enter, modified ESC)", async () => {
+    const h = makeHarness();
+
+    const enter = h.interceptor.handleKeyInput("\r");
+    await sleep(MID_FLIGHT_MS);
+    expect(await h.interceptor.handleKeyInput("\x1b[13;5u")).toBe(""); // Ctrl+Enter
+    expect(await h.interceptor.handleKeyInput("\x1b[27;5u")).toBe(""); // Ctrl+ESC
+    expect(h.getSawAbort()).toBe(false);
+
+    h.finishTranslation("Fix this function");
+    await enter;
+    expect(h.writes).toContain("\r"); // translation completed normally
+  });
+
   it("releases busy after cancel so the next Enter translates again", async () => {
     const h = makeHarness();
 
